@@ -1,0 +1,747 @@
+---
+title: "Qiime2.4_18S_HFP_2022"
+author: "Sarah Tucker"
+date: "12/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+https://github.com/benjjneb/dada2/issues/693
+
+truncLen does two things: It truncates reads to the defined length AND it removes reads that don't reach the truncation length.
+
+So using no truncation you lose no reads that way. When you trancate at say 145 nts you lose most of your reads that don't reach that far. And when you truncate to say 120 you keep most reads, since most reads reach that far.
+
+
+
+This is the correct file! 
+
+
+
+
+```{bash}
+screen -S Miseq 
+
+source /opt/anvio_conda/miniconda3/bin/activate bio-gen
+conda activate qiime2-2021.4
+
+qiime tools import --show-importable-types
+
+cd /tank/tucker_data/HFP_18S/210216/210216_M01498_0767_000000000-JFNB9/BaseCalls
+
+
+
+qiime tools import \
+  --type 'SampleData[PairedEndSequencesWithQuality]' \
+  --input-path /tank/tucker_data/HFP_18S/210216/210216_M01498_0767_000000000-JFNB9/BaseCalls\
+  --input-format CasavaOneEightSingleLanePerSampleDirFmt \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/demux-paired-end.qza 
+  
+  
+  
+qiime demux summarize \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/demux-paired-end.qza    \
+  --o-visualization  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/demux-paired-end.qzv
+
+
+```
+
+
+```{bash}
+#1380F CCCTGCCHTTTGTACACAC
+#1510R CCTTCYGCAGGTTCACCTAC
+#1389F TTGTACACACCGCCC
+
+#based on choi and beccas notes I suspect that 1880F and 1510R are what we are looking for 
+
+
+qiime cutadapt trim-paired \
+    --i-demultiplexed-sequences /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/demux-paired-end.qza \
+    --p-adapter-f CCCTGCCHTTTGTACACAC...GTAGGTGAACCTGCRGAAGG \
+    --p-adapter-r CCTTCYGCAGGTTCACCTAC...GTGTGTACAAADGGCAGGG \
+    --o-trimmed-sequences /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/1380F-210216-demux-paired-end-trimmed.qza \
+    --p-cores 30\
+    --verbose \
+    &> /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/1380F-210216-primer_trimming.log
+    
+    
+    
+qiime demux summarize \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/1380F-210216-demux-paired-end-trimmed.qza  \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/1380F-210216-demux-paired-end-trimmed.qzv
+
+    
+    
+
+```
+
+
+```{bash}
+
+qiime dada2 denoise-paired \
+  --i-demultiplexed-seqs /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/demux-paired-end.qza  \
+  --p-trunc-len-f 125 \
+  --p-trunc-len-r 125 \
+  --o-representative-sequences /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-rep-seqs-dada2_AllSeqs.qza \
+  --o-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-table-dada2_AllSeqs.qza \
+  --o-denoising-stats /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-stats-dada2_AllSeqs.qza \
+  --p-n-threads 30
+  
+  
+qiime metadata tabulate \
+  --m-input-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-stats-dada2_AllSeqs.qza  \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-stats-dada2_AllSeqs.qzv
+
+
+  
+qiime feature-table tabulate-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-rep-seqs-dada2_AllSeqs.qza  \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-rep-seqs-dada2_AllSeqs.qzv
+
+
+qiime feature-table summarize \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-table-dada2_AllSeqs.qza  \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-table-dada2_AllSeqs.qzv \
+  --m-sample-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Meta_seq_enviro_Library1.tsv
+  
+
+  qiime feature-table filter-samples \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-table-dada2_AllSeqs.qza\
+  --m-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Meta_seq_enviro_Library1.tsv \
+  --p-where "[Library]='Library 1'" \
+  --o-filtered-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-_210216-filtered-table-dada2_AllSeqs.qza 
+
+
+
+qiime tools export \
+  --input-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-_210216-filtered-table-dada2_AllSeqs.qza    \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-_210216-exported-filtered-feature-table
+
+cd /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-_210216-exported-filtered-feature-table
+biom convert -i feature-table.biom -o 125-210216-exported-filtered-feature-table.tsv --to-tsv
+
+
+
+qiime feature-table filter-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-rep-seqs-dada2_AllSeqs.qza  \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-_210216-filtered-table-dada2_AllSeqs.qza  \
+  --o-filtered-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-filtered-rep-seqs.qza
+
+qiime feature-table tabulate-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-filtered-rep-seqs.qza \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-filtered-rep-seqs.qzv
+
+  
+  
+  
+  
+qiime feature-table group \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-_210216-filtered-table-dada2_AllSeqs.qza \
+  --p-axis sample \
+  --m-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Meta_seq_enviro_Library1.tsv  \
+  --m-metadata-column good_name \
+  --p-mode sum \
+  --o-grouped-table /tank/tucker_data/MiSeq_Analysis_2021_Final/Renamed-125-210216-filtered-table-dada2_AllSeqs.qza
+
+cp /tank/tucker_data/MiSeq_Analysis_2021_Final/Renamed-125-210216-filtered-table-dada2_AllSeqs.qza  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed-125-210216-filtered-table-dada2_AllSeqs.qza
+
+qiime feature-table summarize \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed-125-210216-filtered-table-dada2_AllSeqs.qza \
+  --o-visualization  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed-251-2021-single_table-dada2_AllSeqs.qzv \
+  --m-sample-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed_Meta_seq_enviro_Library1.tsv
+
+
+
+```
+
+
+
+
+
+################
+################
+
+```{bash}
+qiime tools import \
+  --type 'SampleData[PairedEndSequencesWithQuality]' \
+  --input-path /tank/tucker_data/HFP_18S/210219 \
+  --input-format CasavaOneEightSingleLanePerSampleDirFmt \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Analysis_210219/demux-paired-end.qza 
+
+
+###note in this round I did NOT Trim primers
+
+
+```
+
+
+
+
+```{bash}
+qiime dada2 denoise-paired \
+  --i-demultiplexed-seqs  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Analysis_210219/demux-paired-end.qza  \
+  --p-trunc-len-f 125 \
+  --p-trunc-len-r 125 \
+  --o-representative-sequences /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-rep-seqs-dada2_AllSeqs.qza \
+  --o-table  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-table-dada2_AllSeqs.qza \
+  --o-denoising-stats  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-stats-dada2_AllSeqs.qza \
+  --p-n-threads 30
+  
+  
+  
+  
+qiime metadata tabulate \
+  --m-input-file  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-stats-dada2_AllSeqs.qza \
+  --o-visualization  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-stats-dada2_AllSeqs.qzv
+
+
+  
+qiime feature-table tabulate-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-rep-seqs-dada2_AllSeqs.qza  \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-rep-seqs-dada2_AllSeqs.qzv
+
+
+############
+qiime feature-table summarize \
+  --i-table  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-table-dada2_AllSeqs.qza  \
+  --o-visualization  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-table-dada2_AllSeqs.qzv \
+  --m-sample-metadata-file  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Meta_seq_enviro_Library2.tsv
+  
+
+
+  
+  qiime feature-table filter-samples \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-table-dada2_AllSeqs.qza\
+  --m-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Meta_seq_enviro_Library2.tsv \
+  --p-where "[Library]='Library 2'" \
+  --o-filtered-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-filtered-table-dada2_AllSeqs.qza 
+
+
+
+qiime tools export \
+  --input-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-filtered-table-dada2_AllSeqs.qza    \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-exported-filtered-feature-table
+
+cd /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-exported-filtered-feature-table
+biom convert -i feature-table.biom -o 125_210219-exported-filtered-feature-table.tsv --to-tsv
+
+
+
+qiime feature-table filter-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-rep-seqs-dada2_AllSeqs.qza  \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-filtered-table-dada2_AllSeqs.qza  \
+  --o-filtered-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-filtered-rep-seqs.qza
+
+qiime feature-table tabulate-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-filtered-rep-seqs.qza \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-filtered-rep-seqs.qzv
+
+  
+  
+  
+  
+qiime feature-table group \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-filtered-table-dada2_AllSeqs.qza \
+  --p-axis sample \
+  --m-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Meta_seq_enviro_Library2.tsv  \
+  --m-metadata-column good_name \
+  --p-mode sum \
+  --o-grouped-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed-125_210219-filtered-table-dada2_AllSeqs.qza
+
+
+qiime feature-table summarize \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed-125_210219-filtered-table-dada2_AllSeqs.qza \
+  --o-visualization  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed-125_210219-filtered-table-dada2_AllSeqs.qzv \
+  --m-sample-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed_Meta_seq_enviro_Library2.tsv
+
+
+
+  
+  
+  
+```
+
+
+
+
+
+```{bash}
+
+
+#######Time to merge!! 
+qiime feature-table merge \
+  --i-tables  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed-125-210216-filtered-table-dada2_AllSeqs.qza \
+  --i-tables /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed-125_210219-filtered-table-dada2_AllSeqs.qza  \
+  --o-merged-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-MiSeq_18S_merged_HPF_table.qza
+
+
+
+qiime feature-table merge-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-210216-rep-seqs-dada2_AllSeqs.qza  \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125_210219-filtered-rep-seqs.qza  \
+  --o-merged-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-MiSeq_18S_merged_HPF-rep-seqs.qza
+
+
+
+qiime feature-table summarize \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-MiSeq_18S_merged_HPF_table.qza \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-MiSeq_18S_merged_HPF_table.qzv \
+  --m-sample-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed_Filter_Meta_seq_enviro.tsv
+
+
+qiime feature-table tabulate-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-MiSeq_18S_merged_HPF-rep-seqs.qza \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-MiSeq_18S_merged_HPF-rep-seqs.qzv
+
+
+###https://forum.qiime2.org/t/merging-feature-tables-should-i-also-merge-taxonomy-or-does-it-need-to-be-re-run/15678/2
+
+
+
+
+```
+
+
+
+
+```{bash}
+
+qiime feature-table filter-features \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-MiSeq_18S_merged_HPF_table.qza \
+  --p-min-frequency 10 \
+  --o-filtered-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/freq-125-MiSeq_18S_merged_HPF_table.qza
+  
+
+qiime feature-table filter-features \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/freq-125-MiSeq_18S_merged_HPF_table.qza  \
+  --p-min-samples 2 \
+  --o-filtered-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filter-freq-125-MiSeq_18S_merged_HPF_table.qza  
+  
+  
+  
+qiime feature-table filter-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-MiSeq_18S_merged_HPF-rep-seqs.qza \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filter-freq-125-MiSeq_18S_merged_HPF_table.qza  \
+  --o-filtered-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF-rep-seqs.qza
+
+qiime feature-table tabulate-seqs \
+  --i-data /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF-rep-seqs.qza \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF-rep-seqs.qzv
+
+  
+  qiime feature-table summarize \
+  --i-table /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filter-freq-125-MiSeq_18S_merged_HPF_table.qza   \
+  --o-visualization /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filter-freq-125-MiSeq_18S_merged_HPF_table.qzv  \
+  --m-sample-metadata-file /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/Renamed_Filter_Meta_seq_enviro.tsv
+
+
+```
+
+
+
+###Note after filtering the merged data we are at 766 samples and down to 5,849 ASVs
+###many ASVs found in 500+ samples, so looks like merging was okay 
+
+```{bash}
+
+
+
+
+
+ qiime tools export \
+  --input-path  /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF-rep-seqs.qza \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125_exported-rep-seqs
+  
+  
+  
+#freq-filtered-125-dna-sequences.fasta
+
+
+qiime tools export \
+  --input-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filter-freq-125-MiSeq_18S_merged_HPF_table.qza \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filter-freq-125-exported-filtered-feature-table
+
+cd /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filter-freq-125-exported-filtered-feature-table
+biom convert -i feature-table.biom -o filter-freq-125-exported-filtered-feature-table.tsv --to-tsv
+
+
+
+
+
+
+#https://docs.qiime2.org/2021.4/tutorials/filtering/
+
+
+qiime phylogeny align-to-tree-mafft-fasttree \
+  --i-sequences /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF-rep-seqs.qza  \
+  --o-alignment /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-aligned_MiSeq_18S_merged_HPF-rep-seqs.qza  \
+  --o-masked-alignment /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-masked_aligned_MiSeq_18S_merged_HPF-rep-seqs.qza \
+  --o-tree /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF_unrooted-tree.qza \
+  --o-rooted-tree /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF_rooted-tree.qza
+
+
+
+#Saved FeatureData[AlignedSequence] to: single_aligned-rep-seqs.qza
+#Saved FeatureData[AlignedSequence] to: masked-single_aligned-rep-seqs.qza
+#Saved Phylogeny[Unrooted] to: unrooted-tree.qza
+#Saved Phylogeny[Rooted] to: rooted-tree.qza
+
+
+
+##more prep
+qiime tools export \
+  --input-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF_unrooted-tree.qza  \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-unrooted-exported-tree
+
+
+
+qiime tools export \
+  --input-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-MiSeq_18S_merged_HPF_rooted-tree.qza \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-rooted-exported-tree
+
+#qiime tools export \
+#  --input-path /tank/tucker_data/MiSeq_Analysis_2021_Final/MiSeq_merged_2021_2019_taxonomy.qza \
+#  --output-path  /tank/tucker_data/MiSeq_Analysis_2021_Final/exported-taxonomy
+ 
+ 
+ 
+ 
+ qiime tools export \
+  --input-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-masked_aligned_MiSeq_18S_merged_HPF-rep-seqs.qza  \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-masked-aligned-exported-rep-seqs
+ 
+  
+ qiime tools export \
+  --input-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/filtered-freq-125-aligned_MiSeq_18S_merged_HPF-rep-seqs.qza \
+  --output-path /tank/tucker_data/HFP_18S/Qiime_Analysis18S_2021/125-aligned-exported-rep-seqs
+
+
+```
+
+
+
+
+
+```{r}
+#if (!requireNamespace("BiocManager", quietly=TRUE))
+#   install.packages("BiocManager")
+#BiocManager::install("DECIPHER")
+
+
+#install.packages(devtools)
+#devtools::install_github("pr2database/pr2database")
+
+library(DECIPHER)
+library(pr2database)
+
+
+# Read training set 
+trainingSet <- readRDS("/Users/sarahtucker/Documents/KByt/Phyloseq_2019_2021_MiSeq/pr2_version_4.14.0_SSU.decipher.trained.rds")
+
+# Read sequences to assign
+seq <- readDNAStringSet("/Users/sarahtucker/Documents/KByt/Analysis_18S/freq-filtered-125-dna-sequences.fasta")
+
+# Get the taxonomy from the training set
+
+  ids <- IdTaxa(seq,
+                trainingSet,
+                type="extended",
+                strand="top",
+                threshold=60)
+#ids threshold is 60 now, before did not set a threshold
+  
+  #n_seq <- length(ids)
+  #df_rows <- list()
+taxo_levels <- c("kingdom", "supergroup", "division", "class", "order", "family", "genus", "species")
+
+  
+#for(i in 1:n_seq){
+ # seq_name <- names(ids[i])
+ # taxonomy=paste(x$taxon,collapse=";")
+ # confidence <- ids[[i]]$confidence
+ # df_rows[[i]] = data.frame(seq_name, taxonomy, confidence, taxo_level=c("Root", taxo_levels))
+#}
+
+
+#df <- reduce(df_rows, bind_rows) %>% 
+ # filter(taxo_level !="Root") %>% 
+ # pivot_wider(names_from = taxo_level, values_from = c(taxonomy, confidence))
+
+###Code I used 
+output <- sapply(ids,
+function (id) {
+seq_name <- names(ids)
+paste(id$taxon,
+";",
+round(id$confidence, digits=1),
+sep="",
+collapse="; ")
+})
+head(output)
+
+idk=as.data.frame(output)
+
+
+write.csv(idk, "pr2_assigment_HFP_18S_125.csv")
+
+pr2_18S_taxonomy=read.csv("pr2_assigment_HFP_18S_125_edited.csv")
+
+
+
+```
+
+
+
+#Becca removed contamination from water blanks and negative controls 
+#https://benjjneb.github.io/decontam/vignettes/decontam_intro.html
+
+
+
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("decontam")
+```
+
+```{r}
+library(decontam)
+# load libraries
+library("ggplot2") 
+library("phyloseq") 
+#library(dada2)
+library(methods)
+library(plotly)
+library(ggpubr)
+
+
+
+
+```
+
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+getwd()
+
+###now that you are in the right format you can bring things in as phyloseq objects
+
+# read in otu table
+otu_table_18SASV = read.csv("/Users/sarahtucker/Documents/KByt/Analysis_18S/edited_filter-freq-125-exported-filtered-feature-table.csv", sep=",", row.names=1) 
+otu_table_18SASV = as.matrix(otu_table_18SASV)
+
+# read in taxonomy
+# seperated by kingdom phylum class order family genus species 
+
+#you also need to edit your taxonomy table by separating each column by a comma so that you don't have just one column with all the taxonomic levels. Relabel to be  "Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species" as the column headers 
+
+#note this was the original taxonomy, before using Pr2
+taxonomy_18SASV = read.csv("/Users/sarahtucker/Documents/KByt/Analysis_18S/pr2_assigment_HFP_18S_125_edited.csv", sep=",", row.names=1) 
+
+
+taxonomy_18SASV = as.matrix(taxonomy_18SASV)
+
+#poop=subset(taxonomy_KBytNERR, Order=="D_3__Chloroplast")
+
+#read in metadata
+##note that there is not seq data for all metadata samples 
+###when analyzing metadata strictly, need to edit
+metadata_18SASV=read.csv("/Users/sarahtucker/Documents/KByt/Analysis_18S/Renamed_Filter_Meta_seq_enviro.csv", header=TRUE, fill=TRUE)
+
+rownames(metadata_18SASV) <- metadata_18SASV$SampleID
+metadata_18SASV$SampleID
+META_18SASV= sample_data(metadata_18SASV)
+nsamples(META_18SASV)
+
+#read in tree
+phy_tree18SASV = read_tree("/Users/sarahtucker/Documents/KByt/Analysis_18S/125-unrooted-tree.nwk")
+
+# import as phyloseq objects
+OTU_18SASV = otu_table(otu_table_18SASV, taxa_are_rows = TRUE) 
+TAX_18SASV = tax_table(taxonomy_18SASV)
+
+
+physeq_18SASV = phyloseq(OTU_18SASV, TAX_18SASV, phy_tree18SASV)
+
+physeq_18SASV=merge_phyloseq(physeq_18SASV, META_18SASV)
+ntaxa(physeq_18SASV)
+#5849
+
+
+```
+
+
+```{r}
+
+
+
+df <- as.data.frame(sample_data(physeq_18SASV)) # Put sample_data into a ggplot-friendly data.frame
+df$LibrarySize <- sample_sums(physeq_18SASV)
+df <- df[order(df$LibrarySize),]
+df$Index <- seq(nrow(df))
+ggplot(data=df, aes(x=Index, y=LibrarySize, color=Sample_or_Control)) + geom_point()
+
+```
+
+```{r}
+#Identify Contaminants - Prevalence
+
+#In this method, the prevalence (presence/absence across samples) of each sequence feature in true positive samples is compared to the prevalence in negative controls to identify contaminants.
+
+
+sample_data(physeq_18SASV)$is.neg <- sample_data(physeq_18SASV)$Sample_or_Control == "Control Negative"
+contamdf.prev <- isContaminant(physeq_18SASV, method="prevalence", neg="is.neg", threshold=0.5)
+table(contamdf.prev$contaminant)
+head(which(contamdf.prev$contaminant))
+
+
+
+#The frequency of each sequence (or OTU) in the input feature table as a function of the concentration of amplified DNA in each sample is used to identify contaminant sequences.
+
+#Threshold(Optional). Default 0.1. The probability threshold below which (strictly less than) the null-hypothesis (not a contaminant) should be rejected in favor of the alternate hypothesis (contaminant). A length-two vector can be provided when using the either or both methods: the first value is the threshold for the frequency test and the second for the prevalence test.
+
+#In the prevalence test there is a special value worth knowing, threshold=0.5, that will identify as contaminants all sequences thare are more prevalent in negative controls than in positive samples. Let’s try using this more aggressive classification threshold rather than the default.
+
+??isContaminant()
+
+
+# Make phyloseq object of presence-absence in negative controls and true samples
+ps.pa <- transform_sample_counts(physeq_18SASV, function(abund) 1*(abund>0))
+
+
+ps.pa.neg <- prune_samples(sample_data(ps.pa)$Sample_or_Control == "Control Negative", ps.pa)
+ps.pa.pos <- prune_samples(sample_data(ps.pa)$Sample_or_Control == "True Sample", ps.pa)
+# Make data.frame of prevalence in positive and negative samples
+df.pa <- data.frame(pa.pos=taxa_sums(ps.pa.pos), pa.neg=taxa_sums(ps.pa.neg),
+                      contaminant=contamdf.prev$contaminant)
+ggplot(data=df.pa, aes(x=pa.neg, y=pa.pos, color=contaminant)) + geom_point() +
+  xlab("Prevalence (Negative Controls)") + ylab("Prevalence (True Samples)")
+
+
+
+
+
+### explore negative controls
+# prevelance-contaminants
+ggarrange(
+  plot_bar(subset_samples(
+    prune_taxa(taxa_names(physeq_18SASV) %in% rownames(contamdf.prev[contamdf.prev$contaminant,]), physeq_18SASV), 
+    Timeseries=="Neg"), x="Desc_Sample_ID", fill="Supergroup",
+    title = "Contaiminants (Removed)"),
+  plot_bar(subset_samples(
+    prune_taxa(taxa_names(physeq_18SASV) %in% rownames(contamdf.prev[!contamdf.prev$contaminant,]), physeq_18SASV),
+    Timeseries=="Neg"), x="Desc_Sample_ID", fill="Supergroup",
+    title = "Not Contaiminants (Remaining)")
+)
+
+
+ps.noncontam <- prune_taxa(!contamdf.freq$contaminant, physeq_18SASV)
+ps.noncontam
+
+
+
+plyr::count(data.frame(OTU=rownames(contamdf.freq),
+                 Frequency=contamdf.freq[,"contaminant"],
+                 Prevelance=contamdf.prev[,"contaminant"]), vars = c("Frequency","Prevelance"))
+
+
+# remove contaminants
+ps.noncontam = prune_taxa(!contamdf.prev$contaminant, physeq_18SASV)
+ntaxa(ps.noncontam)
+
+contam = prune_taxa(contamdf.prev$contaminant, physeq_18SASV)
+ntaxa(contam)
+tax_table(contam)
+write.csv(tax_table(contam), "/Users/sarahtucker/Documents/KByt/Analysis_18S/contamination_tax_table.csv")
+write.csv(otu_table(contam), "/Users/sarahtucker/Documents/KByt/Analysis_18S/contamination_otu_table.csv")
+
+##okay so taxonomically speaking the contaminants are all unimportant taxa (metazoa, fungi)
+
+
+
+
+
+```
+
+
+
+```{r}
+
+
+# remove negative controls
+ps.noncontam = subset_samples(ps.noncontam, Timeseries!="Neg")
+ps.noncontam
+
+
+
+# visualize metazoa
+colors = data.frame()
+metazoa = tax_table(tax_glom(ps.noncontam, "Phylum")); metazoa = metazoa[order(metazoa[,"Phylum"]),]
+for (i in 1:dim(metazoa)[1]) {
+  if (metazoa[i,"Phylum"]=="Metazoa") {
+    colors[i,1] = "red"
+  } else {
+    colors[i,1] = "grey"
+  }
+}
+
+plot1 = plot_bar(subset_samples(tax_glom(ps.noncontam, "Phylum"), Timeseries=="HFP"), x="Date", fill="Phylum") + 
+  scale_y_continuous(limits = c(0,600000)) +
+  labs(x = "Read Count", 
+       title = "HFP", 
+       caption = "Total abundances for metazoa (red) and unicellular (grey) reads") +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 1),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = colors[,1])
+
+plot2 = plot_bar(subset_samples(tax_glom(ps.noncontam, "Phylum"), Timeseries=="KBT"), x="Date", fill="Phylum") + 
+  scale_y_continuous(limits = c(0,600000)) +
+  labs(x = "", 
+       title = "KBT", 
+       caption = "") +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = colors[,1])
+ggarrange(plot1, plot2, widths = c(3,1))
+```
+
+```{r}
+# remove Metazoa
+ps.noncontam.noMetazoa = subset_taxa(ps.noncontam, Phylum!="Metazoa")
+ps.noncontam.noMetazoa
+
+###note this didn't work because I didn't realize that there was a space involved in some of the taxa tables, this was resolved, but need to remove again in the clean up of the data 
+
+ps.noncontam.noMetazoa.NoChano=subset_samples(ps.noncontam.noMetazoa, Timeseries!="Choano")
+nsamples(ps.noncontam.noMetazoa.NoChano)
+
+
+
+```
+
+
+```{r}
+
+write.csv(otu_table(ps.noncontam.noMetazoa.NoChano), "otu_table_Timeseries_ASV_18S_nocontam.csv")
+
+write.csv(tax_table(ps.noncontam.noMetazoa.NoChano), "tax_table_Timeseries_ASV_18S_nocontam.csv")
+
+write.csv(sample_data(ps.noncontam.noMetazoa.NoChano), "sample_data_Timeseries_ASV_18S_nocontam.csv")
+
+
+
+
+
+```
+
+
+

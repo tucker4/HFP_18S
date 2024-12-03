@@ -1,0 +1,2951 @@
+---
+title: "Analyzing_18S_ASVs_HFP"
+author: "Sarah Tucker"
+date: "1/3/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list=ls())
+
+# load libraries
+library("ggplot2") 
+library("phyloseq") 
+#library(dada2)
+library(methods)
+library(plotly)
+library(ggpubr)
+library(ape)
+
+###this is from the R tutorial document"https://github.com/joey711/phyloseq/files/1795523/QIIME2_to_Phyloseq.pdf"
+
+
+setwd("/Users/sarahtucker/Documents/KByt/Qiime_Analysis_HFP_18S_2022") 
+
+getwd()
+
+```
+
+
+```{r}
+
+metadata_HFP18SASV=read.csv("sample_data_Timeseries_ASV_18S_nocontam_v2.csv", header=TRUE, fill=TRUE)
+
+test=metadata_HFP18SASV%>%subset(Sample_or_Control=="True Sample")%>%subset(Timeseries=="HFP")%>%subset(Year=="2017"|Year=="2018"| Year=="2019")%>%dplyr::group_by(Date2)%>%tally 
+
+metadata_HFP18SASV$Date2 <- as.Date(metadata_HFP18SASV$Date.1, format="%m/%d/%y")
+
+
+rownames(metadata_HFP18SASV) <- metadata_HFP18SASV$SampleID
+metadata_HFP18SASV$SampleID
+META_HFP18SASV = sample_data(metadata_HFP18SASV)
+nsamples(META_HFP18SASV)
+#748
+
+
+samp_2014_2015=subset(metadata_HFP18SASV, Year=="2014" |Year=="2015")
+
+
+salinity=samp_2017_2019%>% drop_na(S.Salinity.ppt)%>%group_by(Site, Enviro) %>% summarise(mean = mean(S.Salinity.ppt), sd=sd(S.Salinity.ppt), n=n())
+
+
+salinity=samp_2014_2015%>% drop_na(S.Salinity.ppt)%>%group_by(Site, Enviro) %>% summarise(mean = mean(S.Salinity.ppt), sd=sd(S.Salinity.ppt), n=n())
+
+Silicate=samp_2017_2019%>% drop_na(H4SiO4.uM)%>%group_by(Site, Enviro) %>% summarise(mean = mean(H4SiO4.uM), sd=sd(S.Salinity.ppt), n=n()) 
+
+
+NoNA_samp_2014_2015_enviro=samp_2014_2015 %>% select(NO3NO2.uM,H4SiO4.uM,S.Temp.C,S.Salinity.ppt,S.pH, Site, Enviro, Month_Year, Date2, Site)
+NoNA_samp_2014_2015_enviro=NoNA_samp_2014_2015_enviro %>% drop_na()
+
+library(tidyverse)
+
+chla=metadata_HFP18SASV%>%drop_na(Tchla)
+
+library(rstatix)
+library(scales)
+
+
+
+chla$Site <- factor(chla$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+chla_box<- ggplot(data=chla, aes(x=as.factor(Site), y=Tchla/1000))+geom_boxplot(color="black", fill=c("white",
+"red",
+"red",
+"orange",
+"yellow",
+"yellow",
+"yellow",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"blue",
+"blue",
+"blue",
+"blue",
+"purple",
+"purple")) 
+chla_box2=chla_box + theme(legend.title = element_blank()) + ylab("chlorophyll a (ug/L)") +xlab("Site") + scale_y_continuous(trans = log10_trans()) + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1)) 
+chla_box2
+ggsave("chla_from_HPLC_colors_log.pdf", width=4.5, height=4)
+
+
+
+chla$ugchla=chla$Tchla/1000
+chla_mean=chla%>% drop_na(ugchla)%>%group_by(Site) %>% summarise(mean = mean(ugchla), sd=sd(ugchla), n=n())
+
+
+ggplot(data=chla_mean, aes(x=as.factor(Site), y=Site)) + 
+      geom_point(aes(size = mean), alpha = 0.75, shape = 21) + 
+       scale_size_continuous(breaks = c(0.1,1,5,10), limits = c(0.01, 10), range = c(1,50)) + 
+      coord_flip() +
+       labs( x= "", y = "", size = "Frequency (%)", fill = "percent")  + 
+       theme(legend.key=element_blank(), 
+       axis.text.x = element_text(colour = "black", size = 18, face = "bold", angle = 90, vjust = 0.3, hjust = 1), 
+       axis.text.y = element_text(colour = "black", face = "bold", size = 18), 
+       legend.text = element_text(size = 18, face ="bold", colour ="black"), 
+       legend.title = element_text(size = 18, face = "bold"), panel.background = element_blank(), 
+       legend.position = "right", panel.grid.major.y = element_line(colour = "grey95")) 
+ggsave("chla_mean.pdf", width=14, height=14, units="in")
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+```{r}
+
+
+S.Salinity.ppt_box
+
+
+
+Diatom.HPLC=metadata_HFP18SASV%>%drop_na(Fuco)
+
+
+
+
+
+Diatom.HPLC$Fuco.Rel=Diatom.HPLC$Fuco/Diatom.HPLC$Tchla
+Diatom.HPLC$Site <- factor(Diatom.HPLC$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+Diatom.HPLC_box<- ggplot(data=Diatom.HPLC, aes(x=as.factor(Site), y=Fuco.Rel))+geom_boxplot(color="black", fill="gray53") 
+Diatom.HPLC_box2=Diatom.HPLC_box+ theme(legend.title = element_blank()) + ylab("Relative Abundance of Fuxoxanthin") +xlab("Site") +  theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1)) 
+Diatom.HPLC_box2
+ggsave("Fuco_from_HPLC.pdf")
+
+
+
+Zea.HPLC=metadata_HFP18SASV%>%drop_na(Zea)
+
+Zea.HPLC$Zea.Rel=Zea.HPLC$Zea/Zea.HPLC$Tchla
+Zea.HPLC_box<- ggplot(data=Zea.HPLC, aes(x=as.factor(Site), y=Zea.Rel))+geom_boxplot(color="black", fill="gray53") 
+
+Zea.HPLC_box2=Zea.HPLC_box+ theme(legend.title = element_blank()) + ylab("Zeaxathin relative to Tchla") +xlab("Site") +  theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1)) 
+Zea.HPLC_box2
+ggsave("Zea_from_HPLC.pdf")
+
+
+
+
+
+p3=ggplot(NoNA_samp_2014_2015_enviro, aes(Date2, S.Salinity.ppt)) +  facet_wrap(~Site) +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) +
+    geom_smooth(method=lm)
+p3
+
+
+
+
+p3=ggplot(NoNA_samp_2014_2015_enviro, aes(Date2, NO3NO2.uM)) +  facet_wrap(~Site) +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) +
+    geom_smooth(method=lm)
+p3
+
+
+
+p3=ggplot(NoNA_samp_2014_2015_enviro, aes(Date2, H4SiO4.uM)) +  facet_wrap(~Site) +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) +
+    geom_smooth(method=lm)
+p3
+
+
+
+write.csv(NoNA_samp_2017_2019_enviro, "check.csv")
+
+```
+
+
+
+
+```{r}
+
+library(tidyverse)
+
+metadata_HFP18SASV=read.csv("sample_data_Timeseries_ASV_18S_nocontam_v2.csv", header=TRUE, fill=TRUE)
+
+metadata_HFP18SASV$Date2 <- as.Date(metadata_HFP18SASV$Date.1, format="%m/%d/%y")
+
+
+rownames(metadata_HFP18SASV) <- metadata_HFP18SASV$SampleID
+metadata_HFP18SASV$SampleID
+META_HFP18SASV = sample_data(metadata_HFP18SASV)
+nsamples(META_HFP18SASV)
+#748
+
+
+HFP=subset(metadata_HFP18SASV, Timeseries=="HFP")
+
+p3=ggplot(HFP, aes(Date2, S.Temp.C))  +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) +
+    geom_smooth(method=lm)+ylab("Temperature (C)")+xlab("Date")+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+p3
+ggsave("temp_all_sites_HFP.pdf", width=4.5, height=4)
+
+
+p4=ggplot(HFP, aes(Date2,S.Salinity.ppt))  +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) +
+    geom_smooth(method=lm)+ylab("Salinity (ppt)")+xlab("Date")+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+p4
+ggsave("salinity_all_sites_HFP.pdf", width=4.5, height=4)
+
+
+library(ggpubr)
+ggarrange(p3, p4,p5, 
+          ncol = 3, nrow = 1,  common.legend = TRUE, legend = "right")
+
+ggsave("temp_salinity_HFP_RA_Diatoms.pdf")
+
+p3=ggplot(metadata_HFP18SASV, aes(Date2, S.Salinity.ppt)) +  facet_wrap(~Enviro, scales="free_y") +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) +
+    geom_smooth(method=lm)
+p3
+ggsave("salinity_all_sites.pdf", width=10, height=10)
+
+samp_2017_2019=subset(metadata_HFP18SASV, Year=="2017" |Year=="2018" |Year=="2019")
+library(reshape2)
+
+
+salinity=samp_2017_2019%>% drop_na(S.Salinity.ppt)%>%group_by(Site, Enviro) %>% summarise(mean = mean(S.Salinity.ppt), sd=sd(S.Salinity.ppt), n=n())
+Seasons=samp_2017_2019%>%group_by(Site, Season2) %>% summarise( n=n())
+Seasons_tog=dcast(Seasons, Site ~ Season2, value.var = "n")
+
+
+p3=ggplot(salinity, aes(Date2, S.Salinity.ppt)) +  facet_wrap(~Site) +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) +
+    geom_smooth(method=lm)
+p3
+
+
+
+
+salinity2=samp_2017_2019%>% drop_na(S.Salinity.ppt)
+salinity2$Site <- factor(salinity2$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+S.Salinity.ppt_box<- ggplot(data=salinity2, aes(x=as.factor(Site), y=S.Salinity.ppt))+geom_boxplot(color="black", fill=c("white",
+"red",
+"red",
+"orange",
+"orange",
+"yellow",
+"yellow",
+"yellow",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"blue",
+"blue",
+"blue",
+"blue",
+"blue",
+"purple",
+"purple")) 
+S.Salinity.ppt_box
+
+S.Salinity.ppt_box2=S.Salinity.ppt_box+ theme(legend.title = element_blank()) + ylab("Salinity (ppt)") +xlab("Site")  + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+S.Salinity.ppt_box2
+ggsave("Salinity_2017-2019_color.pdf", width=4.5, height=4)
+
+
+
+
+
+write.csv(salinity, "Salinity_2017_2019_meanSites.csv")
+
+
+
+
+Silicate=samp_2017_2019%>% drop_na(H4SiO4.uM)%>%group_by(Site, Enviro) %>% summarise(mean = mean(H4SiO4.uM), sd=sd(H4SiO4.uM), n=n()) 
+
+
+Silicate=samp_2017_2019%>% drop_na(H4SiO4.uM)
+Silicate$Site <- factor(Silicate$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+Silicate_box<- ggplot(data=Silicate, aes(x=as.factor(Site), y=H4SiO4.uM))+geom_boxplot(color="black", fill=c("white",
+"red",
+"red",
+"orange",
+"orange",
+"yellow",
+"yellow",
+"yellow",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"green",
+"blue",
+"blue",
+"blue",
+"blue",
+"blue",
+"purple",
+"purple")) 
+
+Silicate_box
+Silicate_box2=Silicate_box+ theme(legend.title = element_blank()) + ylab("Silicate (uM)") +xlab("Site") + scale_y_continuous(trans = log10_trans()) + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+Silicate_box2
+ggsave("Silicate_2017-2019_color_log.pdf", width=4.5, height=4)
+
+
+```
+
+
+
+
+```{r}
+Silicate2=samp_2017_2019
+
+Silicate2=subset(Silicate2, Site!="Pua" & Site!="SB")
+
+
+Silicate2$Site <- factor(Silicate2$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+
+Sil=ggplot(Silicate2, aes(x=as.factor(Site), y=H4SiO4.uM, fill=Season.Aka)) + 
+    geom_boxplot()
+
+
+Sil
+Sil2=Sil+ theme(legend.title = element_blank()) + ylab("Silicate (uM)") +xlab("Site")  + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+Sil2
+ggsave("Silicate_2017-2019_color_log.pdf", width=4.5, height=4)
+
+
+
+
+
+
+Silicate2=samp_2017_2019
+
+Silicate2=subset(Silicate2, Site!="Pua" & Site!="SB")
+
+
+Silicate2$Site <- factor(Silicate2$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+Silicate2$NSI=Silicate2$NO3NO2.uM/Silicate2$H4SiO4.uM
+
+
+Sil=ggplot(Silicate2, aes(x=as.factor(Site), y=NSI, fill=Season.Aka)) + 
+    geom_boxplot()
+
+
+Sil
+Sil2=Sil+ theme(legend.title = element_blank()) + ylab("Nitrate:Silicate") +xlab("Site")  + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+Sil2
+ggsave("NitrateSilicateRatio_2017-2019.pdf", width=4.5, height=4)
+
+
+
+
+
+
+
+
+
+Silicate2=samp_2017_2019
+
+Silicate2=subset(Silicate2, Site!="Pua" & Site!="SB")
+
+
+Silicate2$Site <- factor(Silicate2$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+Silicate2$NSI=Silicate2$NO3NO2.uM/Silicate2$H4SiO4.uM
+
+
+Silicate3=subset(Silicate2, SampleID!="HFP_20171209_E01")
+
+Sil=ggplot(Silicate3, aes(x=as.factor(Site), y=TDN.uM, fill=Season.Aka)) + 
+    geom_boxplot()
+
+
+Sil
+Sil2=Sil+ theme(legend.title = element_blank()) + ylab("TDN.uM") +xlab("Site")  + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+Sil2
+ggsave("TDN.uM_2017-2019.pdf", width=4.5, height=4)
+
+
+
+
+Silicate2=samp_2017_2019
+
+Silicate2=subset(Silicate2, Site!="Pua" & Site!="SB")
+
+
+Silicate2$Site <- factor(Silicate2$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+Silicate2$NP=Silicate2$NO3NO2.uM/Silicate2$PO4.uM
+
+
+Silicate3=subset(Silicate2, SampleID!="HFP_20190425_L05" & SampleID!="HFP_20190425_L11" & SampleID!="HFP_20190325_L01")
+
+
+Sil=ggplot(Silicate3, aes(x=as.factor(Site), y=DON_DOP_ratio, fill=Season.Aka)) + 
+    geom_boxplot()
+
+
+Sil
+Sil2=Sil+ theme(legend.title = element_blank()) + ylab("DON_DOP_ratio") +xlab("Site")  + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+Sil2
+ggsave("DON_DOP_ratio2017-2019.pdf", width=4.5, height=4)
+
+
+
+
+Silicate3=subset(Silicate2, SampleID!="HFP_20190425_L05" & SampleID!="HFP_20190425_L11" & SampleID!="HFP_20190325_L01")
+
+
+Sil=ggplot(Silicate2, aes(x=as.factor(Site), y=DIN_DIP_ratio, fill=Season.Aka)) + 
+    geom_boxplot()
+
+
+Sil
+Sil2=Sil+ theme(legend.title = element_blank()) + ylab("DIN_DIP_ratio") +xlab("Site")  + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+Sil2
+ggsave("DIN_DIP_ratio2017-2019.pdf", width=4.5, height=4)
+
+
+
+
+test=subset(Silicate2, DIN_DIP_ratio <100)
+summary(test$DIN_DIP_ratio)
+
+Sil=ggplot(test, aes(x=as.factor(Site), y=DIN_DIP_ratio, fill=Season.Aka)) + 
+    geom_boxplot()
+
+
+Sil
+Sil3=Sil+ theme(legend.title = element_blank()) + ylab("DIN_DIP_ratio") +xlab("Site")  + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+Sil3
+ggsave("DIN_DIP_No_outliers.pdf", width=4.5, height=4)
+
+
+
+```
+
+
+
+```{r}
+Silicate2=samp_2017_2019
+
+Silicate2=subset(Silicate2, Site!="Pua" & Site!="SB")
+
+
+Silicate2$Site <- factor(Silicate2$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+
+Sil=ggplot(Silicate2, aes(x=as.factor(Site), y=S.Salinity.ppt, fill=Season.Aka)) + 
+    geom_boxplot()
+
+
+Sil
+Sil2=Sil+ theme(legend.title = element_blank()) + ylab("Silicate (uM)") +xlab("Site")  + theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+Sil2
+ggsave("Silicate_2017-2019_color_log.pdf", width=4.5, height=4)
+
+
+
+```
+
+
+
+
+
+```{r}
+
+Silicate=samp_2017_2019%>% drop_na(H4SiO4.uM)%>%group_by(Site, Season.Aka) %>% summarise(mean = mean(H4SiO4.uM), sd=sd(H4SiO4.uM), n=n()) 
+
+Silicate=subset(Silicate, Site!="Pua" & Site!="SB")
+
+
+Silicate$Site <- factor(Silicate$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+
+f3=Silicate%>%
+  ggplot(aes( x=as.factor(Site), y=mean)) + geom_bar(stat="identity") + facet_wrap(~Season.Aka) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.title.y = element_text(size = 20), axis.text=element_text(size=20), legend.text=element_text(size=20), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("") + theme(legend.title = element_blank()) + ylab("Average Silicate (uM)")
+
+f3
+
+ggsave("Silicate_over_Seasons.pdf", width=10)
+
+```
+
+
+
+```{r}
+NoNA_samp_2017_2019_enviro=samp_2017_2019 %>% select(NO3NO2.uM,PO4.uM,H4SiO4.uM,S.Temp.C,S.Salinity.ppt,S.pH, Site, Enviro,  Date2)
+NoNA_samp_2017_2019_enviro=NoNA_samp_2017_2019_enviro %>% drop_na()
+write.csv(NoNA_samp_2017_2019_enviro, "check.csv")
+
+
+p3=ggplot(NoNA_samp_2017_2019_enviro, aes(Date2, S.Salinity.ppt)) +  facet_wrap(~Site, scales="free_y") +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) + geom_smooth(method=lm)
+p3
+
+
+
+library(vegan)
+dis <- vegdist(NoNA_samp_2017_2019_enviro[,1:6], "euclid")
+
+#perform NMDS
+ NMDS = metaMDS(dis)
+
+#build a data frame with NMDS coordinates and metadata
+ MDS1 = NMDS$points[,1]
+ MDS2 = NMDS$points[,2]
+ NMDS = data.frame(MDS1 = MDS1, MDS2 = MDS2, site=NoNA_samp_2017_2019_enviro$Site)
+ 
+ ggplot(NMDS, aes(x=MDS1, y=MDS2, col=site)) +
+ geom_point() +
+ stat_ellipse() +
+ theme_bw() +
+ labs(title = "NMDS Plot")
+
+ 
+ 
+set.seed(123)
+######try nMDS
+bray=vegdist(Enviro_only, method="bray", binary=FALSE, diag=FALSE, upper=FALSE, autotransform = FALSE)
+
+
+
+
+#perform NMDS
+Meta_NMDS = metaMDS(dis, k = 2)
+
+#build a data frame with NMDS coordinates and metadata
+ MDS1 = Meta_NMDS$points[,1]
+ MDS2 = Meta_NMDS$points[,2]
+ NMDS = data.frame(MDS1 = MDS1, MDS2 = MDS2, Site=NoNA_samp_2017_2019_enviro$Enviro)
+ #NMDS
+ #pdf("metadata_nMDS_NERR.pdf")
+ ggplot(NMDS, aes(x=MDS1, y=MDS2, col=NoNA_samp_2017_2019_enviro$Enviro)) +
+   geom_point() + geom_text(aes(label=NoNA_samp_2017_2019_enviro$Site)) +
+labs(col="type") +
+ theme_bw() +
+ labs(title = "NMDS 2017-2019 HFP+KBT YSI & Nutrients") + theme(axis.text=element_text(size=14), legend.text=element_text(size=14),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,
+                                    size = 1))
+ 
+ggsave("NMDS_KBT_HFP_20172019.pdf")
+ 
+ Meta_NMDS$stress
+#stress values below 0.05 represent a good fit 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ p= ggplot(NMDS, aes(x=MDS1, y=MDS2, NoNA_samp_2017_2019_enviro$Enviro)) +
+   geom_point()  +
+labs(col="Environment Types") +
+ labs(title = "NMDS Plot of YSI,chla,FCM data w Bray Distance") + theme(axis.text=element_text(size=14), legend.text=element_text(size=14),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,
+                                    size = 1))
+ p
+
+ p + scale_color_manual(values = c("#e9f12d", "#b4145e","#1d78d4"))
+ ggsave("nMDS_YSI_FCM_CHLA_v3.svg")
+
+
+```
+
+
+
+```{r}
+
+library(dendextend)
+library(colorspace)
+
+
+NoNA_samp_2017_2019_enviro=samp_2017_2019 %>% select(NO3NO2.uM,PO4.uM,H4SiO4.uM,S.Temp.C,S.Salinity.ppt,S.pH, Site, Enviro, Timeseries, Year, Clustering_Euc_Ward)
+NoNA_samp_2017_2019_enviro=NoNA_samp_2017_2019_enviro %>% drop_na()
+
+Clustering=NoNA_samp_2017_2019_enviro%>%group_by(Clustering_Euc_Ward,Site, Enviro) %>% summarise( n=n())
+
+Clustering$Site <- factor(Clustering$Site, levels=c("E02",
+"M01",
+"M02",
+"Pua",
+"L05",
+"L07",
+"L06",
+"L08",
+"L09",
+"L11","L03", "L04", "L02", "L10", "L01", "M06", "M05", "M04", "M03", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+#n_Enviro_types <- length(unique(Enviro_type))
+#Enviro_cols <- colorspace::rainbow_hcl(n_Enviro_types, c = 70, l  = 50)
+colors_c <- c("firebrick3","#E09470","#D8794C", "#FFBF00", "#F28C28", "#F88379","#FF5F1F","#E3735E","#FF4433", "#c2b280", "#a99a86", "#918151","#856d4d", "#e3dac9","#f5deb3", "#7FFFD4", "#DFFF00","#228B22","#50C878","#89CFF0", "#7393B3","#0096FF", "#6495ED","#5D3FD3","#0047AB")
+
+
+Clustering$Clustering_Euc_Ward <- factor(Clustering$Clustering_Euc_Ward, levels=c("Cluster_4", "Cluster_3","Cluster_2", "Cluster_1"))
+
+
+
+p <- ggplot(data=Clustering, aes(x=as.factor(Clustering_Euc_Ward), y=n, fill=as.factor(Site)))
+p + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("Clustering of Sites HFP KBT 2017-2019") +theme(legend.position = "right")+scale_fill_manual("Site",values=colors_c)+ coord_flip()+ xlab("")+ ylab("Number of Samples")+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,
+                                    size = 1))
+ggsave("Clustering_Sites_of_HFP_KBT_2017-2019.pdf", height=10, width=10)
+
+
+
+
+
+
+
+
+write.csv(NoNA_samp_2017_2019_enviro, "idk.csv")
+
+library(vegan)
+dis <- vegdist(NoNA_samp_2017_2019_enviro[,1:6], "euclid")
+
+
+
+
+d1 = NoNA_samp_2017_2019_enviro[,1:6] %>% dist(method="euclidean")  %>% hclust(method = "ward.D2") %>% as.dendrogram() 
+pdf("d1.pdf")
+par(cex=0.2)
+plot(d1, cex=0.2)
+dev.off()
+d1
+summary(d1)
+str(d1)
+##get label order
+tom=labels(d1)
+write.csv(tom, "ordering_euc_ward_HFP_KBT.csv")
+
+
+library(colorspace)
+
+### for the colored bars 
+k234 <- cutree(d1, k = 2:5)
+
+
+
+Year_type <- factor(NoNA_samp_2017_2019_enviro$Year, levels=c("2017", "2018", "2019"))
+#n_Enviro_types <- length(unique(Enviro_type))
+#Enviro_cols <- colorspace::rainbow_hcl(n_Enviro_types, c = 70, l  = 50)
+colors_c <- c("firebrick3","dodgerblue1", "green")
+col_Year_type <- colors_c[Year_type]
+
+
+
+
+TS_type <- factor(NoNA_samp_2017_2019_enviro$Timeseries, levels=c("HFP", "KBT"))
+#n_Enviro_types <- length(unique(Enviro_type))
+#Enviro_cols <- colorspace::rainbow_hcl(n_Enviro_types, c = 70, l  = 50)
+colors_c <- c("firebrick3","dodgerblue1")
+col_TS_type <- colors_c[TS_type]
+
+as.factor(NoNA_samp_2017_2019_enviro$Site)
+levels(as.factor(NoNA_samp_2017_2019_enviro$Site))
+
+Site_type <- factor(NoNA_samp_2017_2019_enviro$Site, levels=c("E02",
+"M01",
+"M02",
+"Pua",
+"L05",
+"L07",
+"L06",
+"L08",
+"L09",
+"L11","L03", "L04", "L02", "L10", "L01", "M06", "M05", "M04", "M03", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+n_Site_types <- length(unique(Site_type))
+Site_cols <- colorspace::rainbow_hcl(n_Site_types, c = 70, l  = 50)
+
+#n_Enviro_types <- length(unique(Enviro_type))
+#Enviro_cols <- colorspace::rainbow_hcl(n_Enviro_types, c = 70, l  = 50)
+colors_c <- c("firebrick3","#E09470","#D8794C", "#FFBF00", "#F28C28", "#F88379","#FF5F1F","#E3735E","#FF4433", "#c2b280", "#a99a86", "#918151","#856d4d", "#e3dac9","#f5deb3", "#7FFFD4", "#DFFF00","#228B22","#50C878","#89CFF0", "#7393B3","#0096FF", "#6495ED","#5D3FD3","#0047AB")
+col_Site_type <- colors_c[Site_type]
+
+
+
+
+
+
+
+
+
+
+
+as.factor(NoNA_samp_2017_2019_enviro$Enviro)
+levels(as.factor(NoNA_samp_2017_2019_enviro$Enviro))
+
+
+
+
+pdf("Euclidean_wardD_clustering_HFP_KBT.pdf", height=12, width=6)
+par(mar = c(2,2,2,12))
+d1 %>% 
+    set("labels_cex",0.2) %>% 
+    plot(main="Euclidean wardD", horiz = TRUE)
+colored_bars(cbind(k234[,3], col_TS_type, col_Site_type, col_Year_type ), d1, horiz = TRUE, y_shift=-1)
+d1
+
+dev.off()
+d1
+
+
+pdf("Euclidean_wardD_just_K.pdf", height=12, width=6)
+par(mar = c(2,2,2,20))
+d1 %>% 
+    set("labels_cex",0.3) %>% 
+    plot(main="Euclidean wardD", horiz = TRUE)
+colored_bars(cbind(k234[,3]), d1, horiz = TRUE, y_shift=-1)
+d1
+
+dev.off()
+d1
+
+
+
+```
+
+
+
+```{r}
+
+Enviro <- read.csv("clustering_pca_v5_inMiSeqAnalyses.csv", row.names = 1)
+Enviro=Enviro%>%drop_na()
+pop=Enviro[,9:18]
+prcomp_enviro=Enviro
+mtcars.pca <- prcomp(NoNA_samp_2017_2019_enviro[,1:6], center = TRUE,scale. = TRUE)
+
+
+summary(mtcars.pca)
+str(mtcars.pca)
+#install_github("vqv/ggbiplot")
+
+library(ggbiplot)
+
+ggbiplot(mtcars.pca)
+
+
+labels=rownames(prcomp_enviro)
+
+ggbiplot(mtcars.pca, groups=NoNA_samp_2017_2019_enviro$Clustering_Euc_Ward)+
+  scale_colour_manual(name="Clustering", values= c("#0096FF","#50C878","black", "#de546c"))+
+  ggtitle("")+geom_point(aes(colour=NoNA_samp_2017_2019_enviro$Clustering_Euc_Ward), size = 3)+
+  theme(legend.position = "bottom")+theme(axis.text=element_text(size=14), legend.text=element_text(size=14), axis.title=element_text(size=14,face="bold"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) +theme(legend.position = "bottom") 
+
+ggsave("HFP_KBT_prcomp_bycluster_v2.pdf", width=10, height=10)
+
+```
+
+
+
+
+
+
+```{r}
+
+
+######Note I removed two very poor quality samples HFP_20180126_E02 and HFP_20140730_P9_B, now down to 748 samples
+###now that you are in the right format you can bring things in as phyloseq objects
+
+# read in otu table
+otu_table_HFP18SASV = read.csv("otu_table_Timeseries_ASV_18S_nocontam_v2.csv", sep=",", row.names=1) 
+otu_table_HFP18SASV = as.matrix(otu_table_HFP18SASV)
+
+# read in taxonomy
+# seperated by kingdom phylum class order family genus species 
+
+#you also need to edit your taxonomy table by separating each column by a comma so that you don't have just one column with all the taxonomic levels. Relabel to be  "Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species" as the column headers 
+
+#note this was the original taxonomy, before using Pr2
+taxonomy_HFP18SASV = read.csv("tax_table_Timeseries_ASV_18S_nocontam_v3.csv", sep=",", row.names=1) 
+
+
+taxonomy_HFP18SASV = as.matrix(taxonomy_HFP18SASV)
+
+#poop=subset(taxonomy_KBytNERR, Order=="D_3__Chloroplast")
+
+#read in metadata
+##note that there is not seq data for all metadata samples 
+###when analyzing metadata strictly, need to edit
+metadata_HFP18SASV=read.csv("sample_data_Timeseries_ASV_18S_nocontam_v2.csv", header=TRUE, fill=TRUE)
+
+rownames(metadata_HFP18SASV) <- metadata_HFP18SASV$SampleID
+metadata_HFP18SASV$SampleID
+META_HFP18SASV = sample_data(metadata_HFP18SASV)
+nsamples(META_HFP18SASV)
+#748
+
+#read in tree
+phy_treeHFP18SASV = read_tree("/Users/sarahtucker/Documents/KByt/Analysis_18S/125-unrooted-tree.nwk", package="phyloseq")
+
+# import as phyloseq objects
+OTU_HFP18SASV = otu_table(otu_table_HFP18SASV, taxa_are_rows = TRUE) 
+TAX_HFP18SASV = tax_table(taxonomy_HFP18SASV)
+
+
+physeq_HFP18SASV = phyloseq(OTU_HFP18SASV, TAX_HFP18SASV, phy_treeHFP18SASV)
+
+physeq_HFP18SASV=merge_phyloseq(physeq_HFP18SASV, META_HFP18SASV)
+ntaxa(physeq_HFP18SASV)
+#5807
+
+
+```
+
+
+
+```{r}
+
+##Removing unwanted sequences
+
+table(tax_table(physeq_HFP18SASV)[, "Domain"], exclude = NULL)
+
+physeq_HFP18SASV_clean <- subset_taxa(physeq_HFP18SASV, Domain=="Eukaryota")
+
+##note comma before Unassigned is an artifact of my conversion of the taxonomy table
+nsamples(physeq_HFP18SASV_clean)
+ntaxa(physeq_HFP18SASV_clean)
+#3282
+
+
+table(tax_table(physeq_HFP18SASV_clean)[, "Supergroup"], exclude = NULL)
+
+#remove all of the metazoa
+table(tax_table(physeq_HFP18SASV_clean)[, "Phylum"], exclude = NULL)
+# 486 metazoa
+#but also should we remove the fungi? I guess these could be microbial, so maybe not?
+
+physeq_HFP18SASV_clean = subset_taxa(physeq_HFP18SASV_clean, Phylum!="Metazoa")
+ntaxa(physeq_HFP18SASV_clean)
+#2796
+
+
+###Note I am not going to remove unclassified taxa at the phylum or supergroup level
+
+
+rel.abun <- transform_sample_counts(physeq_HFP18SASV_clean, function(OTU) OTU/sum(OTU))
+ntaxa(rel.abun)
+
+head(tax_table(rel.abun))
+
+
+Unassigned_Supergroup=subset_taxa(rel.abun, Supergroup=="" | Supergroup=="unclassified_Eukaryota" )
+ntaxa(Unassigned_Supergroup)
+
+Unassigned_Supergroup_melt=psmelt(Unassigned_Supergroup)
+#Unassigned_Supergroup_melt$Date1 <- as.Date(Unassigned_Supergroup_melt$Date1,format = "%m/%d/%y")
+p <- ggplot(data=Unassigned_Supergroup_melt, aes(x=SampleID, y=Abundance, fill=Supergroup))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("Unassigned_Supergroup_18S_ASV") +theme(legend.position = "right")
+ggsave("Unassigned_Supergroup_18S_ASV.pdf", height=20, width=20)
+
+
+
+
+```
+
+
+######
+EVALUATING SEQUENCING DEPTH
+######
+
+
+
+```{r}
+
+##not using cleaned, cleaned removes sequences based on our poor taxonomic assignments not based on well it was sequenced
+
+sdt = data.frame(as(sample_data(physeq_HFP18SASV), "data.frame"),
+                 TotalReads = sample_sums(physeq_HFP18SASV_clean), keep.rownames = TRUE)
+sdt
+
+write.csv(sdt, "sdt.csv")
+
+pSeqDepth = ggplot(sdt, aes(TotalReads)) + geom_histogram() + ggtitle("Sequencing Depth Taxa Uncleaned")
+pSeqDepth 
+ggsave("Sequencing_Depth_Taxa_uncleaned.pdf")
+
+
+library(vegan)
+
+
+pdf("rarefacation_18S_ASV_HPF.pdf")
+rarecurve(t(otu_table(physeq_HFP18SASV)), step=50, cex=0.5)
+dev.off()
+
+  
+```
+
+```{r}
+
+ntaxa(physeq_HFP18SASV_clean)
+#2796
+
+physeq_HFP18SASV_clean=subset_samples(physeq_HFP18SASV_clean, non.chimeric>10000)
+
+Phyto_physeq_HFP18SASV_clean=subset_taxa(physeq_HFP18SASV_clean, Worden_Phyto=="Phytoplankton")
+
+
+
+
+rel.abun <- transform_sample_counts(physeq_HFP18SASV_clean, function(OTU) OTU/sum(OTU))
+ntaxa(rel.abun)
+#2796
+
+Phyto.rel.abun <- transform_sample_counts(Phyto_physeq_HFP18SASV_clean, function(OTU) OTU/sum(OTU))
+ntaxa(Phyto.rel.abun)
+
+
+
+Phyto_Salmaso_physeq_HFP18SASV_clean=subset_taxa(physeq_HFP18SASV_clean, Salmaso_Phyto=="Phytoplankton")
+Salmaso.Phyto.rel.abun <- transform_sample_counts(Phyto_Salmaso_physeq_HFP18SASV_clean, function(OTU) OTU/sum(OTU))
+ntaxa(Salmaso.Phyto.rel.abun)
+#943
+
+#x1 = prune_taxa(taxa_sums(physeq_HFP18SASV_clean) > 10, physeq_HFP18SASV_clean) 
+#ntaxa(x1)
+
+#write.csv(otu_table(x1), "OTU_TABLE_CLEAN_DESEQ.csv")
+#write.csv(tax_table(x1), "TAXA_TABLE_CLEAN_DESEQ.csv")
+#write.csv(sample_data(x1), "Sample_data_CLEAN_DESEQ.csv")
+
+###Note I am not going to remove unclassified taxa at the phylum or supergroup level
+
+
+
+
+```
+
+```{r}
+
+rel.abun <- transform_sample_counts(physeq_HFP18SASV_clean, function(OTU) OTU/sum(OTU))
+ntaxa(rel.abun)
+#2796
+Just_phyto_reltoall=subset_taxa(rel.abun,Worden_Phyto=="Phytoplankton")
+ntaxa(Just_phyto_reltoall)
+
+
+
+
+Just_phyto_reltoall=subset_taxa(rel.abun,Salmaso_Phyto=="Phytoplankton")
+ntaxa(Just_phyto_reltoall)
+
+glom=tax_glom(Just_phyto_reltoall,"Worden_Taxonomy")
+ntaxa(glom)
+
+tax_table(glom)
+
+glom_201789=subset_samples(glom, Year=="2017" | Year=="2018"| Year=="2019")
+nsamples(glom_201789)
+
+glom_201789_v2=subset_samples(glom_201789,SampleID!="HFP_20190128_L11")
+nsamples(glom_201789_v2)
+
+write.csv(sample_data(glom_201789_v2), "sampledata_Subset_corr.csv")
+
+
+write.csv(otu_table(glom_201789), "glom_phytoplankton_otu.csv")
+write.csv(tax_table(glom),"glom_phytoplankton_taxa_table.csv")
+
+
+
+
+#Make one model that has all the predictors,
+Modelling <- read.csv('Correlations_Rappe_Tucker_FCM_Sample_List.csv', row.names = 1)
+Correlations=Modelling %>% select(NO3NO2.uM,PO4.uM,H4SiO4.uM,S.Temp.C,S.Salinity.ppt,S.pH,Diatoms,Bolidophyceae,Mamiellophyceae,Pelagophyceae,Haptophyta,Pavlovophyceae,Prymnesiophyceae,Dictyochophyceae,Cryptophyta)
+
+
+sapply(Correlations, class)
+check_cor=Correlations %>% mutate_if(is.factor,as.numeric)
+check_cor=Correlations%>% mutate_if(is.integer,as.numeric)
+sapply(check_cor, class)
+#check_cor2=check_cor[,-1]
+
+cormat <- round(cor(check_cor, method = "pearson"),2)
+cormat
+class(cormat)
+
+
+
+library(corrplot)
+pdf("correlation_Phytoplankton_HFPKBT.pdf", width=12, height=12)
+corrplot(cormat, type = "lower",
+         tl.col = "black", col=col1(10), tl.cex=2, cl.cex = 2)
+
+dev.off()
+
+corrplot(cormat, type = "lower",
+         tl.col = "black", col=col1(10))
+
+col1 = colorRampPalette(c('#00007F', 'blue',  '#007FFF', 'cyan', 'white',
+                           'yellow', '#FF7F00', 'red', '#7F0000'))
+
+
+colorRampPalette(c("blue","white","red"))(200)
+
+
+
+
+
+
+
+#Make one model that has all the predictors,
+Modelling <- read.csv('Correlations_Rappe_Tucker_FCM_Sample_List.csv', row.names = 1)
+HFP=subset(Modelling, Timeseries=="HFP")
+Correlations=HFP %>% select(NO3NO2.uM,PO4.uM,H4SiO4.uM,S.Temp.C,S.Salinity.ppt,S.pH,Diatoms,Bolidophyceae,Mamiellophyceae,Pelagophyceae,Haptophyta,Pavlovophyceae,Prymnesiophyceae,Dictyochophyceae,Cryptophyta)
+
+
+sapply(Correlations, class)
+check_cor=Correlations %>% mutate_if(is.factor,as.numeric)
+check_cor=Correlations%>% mutate_if(is.integer,as.numeric)
+sapply(check_cor, class)
+#check_cor2=check_cor[,-1]
+
+cormat <- round(cor(check_cor, method = "pearson"),2)
+cormat
+class(cormat)
+
+
+
+library(corrplot)
+pdf("correlation_Phytoplankton_justHFP.pdf", width=12, height=12)
+corrplot(cormat, type = "lower",
+         tl.col = "black", col=col1(10), tl.cex=2, cl.cex = 2)
+
+dev.off()
+
+corrplot(cormat, type = "lower",
+         tl.col = "black", col=col1(10))
+
+col1 = colorRampPalette(c('#00007F', 'blue',  '#007FFF', 'cyan', 'white',
+                           'yellow', '#FF7F00', 'red', '#7F0000'))
+
+
+colorRampPalette(c("blue","white","red"))(200)
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+```{r}
+
+library(randomcoloR)
+n <- 27
+palette2 <- distinctColorPalette(n)
+
+```
+
+
+
+
+
+
+
+```{r}
+rel_abun_HFP_KBT_2017_2019=subset_samples(rel.abun, Year=="2017" | Year=="2018"| Year=="2019")
+
+
+Abun_By_Genus=tax_glom(rel_abun_HFP_KBT_2017_2019, "All_Taxonomy")
+df_Genus_total <- Abun_By_Genus %>% psmelt() %>% group_by(OTU,All_Taxonomy,Site, Enviro) %>% summarise(mean = mean(Abundance), sd=sd(Abundance)) 
+
+df_Genus_total$percent_total_mean=df_Genus_total$mean*100
+df_Genus_total$percent_total_SD=df_Genus_total$sd*100
+
+write.csv(df_Genus_total,"Top_Diatom_Species_by_Site.csv")
+
+library(reshape2)
+
+df_Order_Site_mean=dcast(df_Genus_total, Genus ~ Site+Enviro, value.var ="percent_total_mean")
+df_Order_Site_sd=dcast(df_Genus_total, Genus ~ Site+Enviro, value.var = "percent_total_SD")
+
+write.csv(df_Order_Site_mean, "Top_Genus_mean_Site_everything.csv")
+write.csv(df_Order_Site_sd, "df_Genus_Site_sd.csv")
+
+
+
+
+
+
+
+
+Abun_By_Class=tax_glom(rel_abun_HFP_KBT_2017_2019, "Class")
+
+df_Order_Class<- Abun_By_Class %>% psmelt() %>% group_by(OTU,Class, Site, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+library(reshape2)
+df_Class_Site_mean=dcast(df_Order_Class, OTU+Class ~ Enviro, value.var ="mean")
+df_Class_Site_sd=dcast(df_Order_Class, OTU+Class ~ Enviro, value.var = "sd")
+
+write.csv(df_Class_Site_mean, "df_Class_Enviro_mean.csv")
+write.csv(df_Class_Site_sd, "df_Class_Enviro_sd.csv")
+
+
+library(dplyr)
+df_Order_Class_top=subset(df_Order_Class, mean>1)
+
+library(randomcoloR)
+n <- 35
+palette2 <- distinctColorPalette(n)
+
+
+
+
+f3=df_Order_Class_top %>%
+  ggplot(aes(fill=Class, x=Site, y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("Classes >1% in Average Relative Abundance per Site")
+
+f3
+
+ggsave("Classes_1per_Average_relative_abundance_per_Site.pdf", width=15, height=10)
+
+
+
+
+
+
+
+
+Abun_By_Genus=tax_glom(rel_abun_HFP_KBT_2017_2019, "Genus")
+
+df_Order_Genus<- Abun_By_Genus %>% psmelt() %>% group_by(OTU,Genus, Site, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+df_Class_Site_mean=dcast(df_Order_Class, OTU+Class ~ Enviro, value.var ="mean")
+df_Class_Site_sd=dcast(df_Order_Class, OTU+Class ~ Enviro, value.var = "sd")
+
+
+
+
+library(dplyr)
+df_Order_Genus_top=subset(df_Order_Genus, mean>1)
+
+library(randomcoloR)
+n <- 90
+palette3 <- distinctColorPalette(n)
+
+
+
+
+
+f3=df_Order_Genus_top %>%
+  ggplot(aes(fill=Genus, x=Site, y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette3) +ggtitle("Genus >1% in Average Relative Abundance per Site")
+
+f3
+
+ggsave("Genus_5per_Average_relative_abundance_per_Site.pdf", width=15, height=10)
+
+
+
+
+
+Dinos=subset_taxa(rel_abun_HFP_KBT_2017_2019, Phylum=="Dinoflagellata")
+ntaxa(Dinos)
+
+Abun_By_Genus=tax_glom(Dinos, "Genus")
+
+df_Order_Genus<- Abun_By_Genus %>% psmelt() %>% group_by(Genus, Site, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+df_Class_Site_mean=dcast(df_Order_Genus, Genus ~ Site, value.var ="mean")
+df_Class_Site_sd=dcast(df_Order_Genus, Family ~ Site, value.var = "sd")
+
+
+
+
+
+f3=df_Order_Genus %>%
+  ggplot(aes(fill=Family, x=Site, y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette3) +ggtitle("Dinoflagellate Families across sites")
+
+f3
+
+ggsave("Dinoflagellate_Average_relative_abundance_per_Site.pdf", width=15, height=10)
+
+
+###############
+
+
+Ciliophora=subset_taxa(rel_abun_HFP_KBT_2017_2019, Phylum=="Ciliophora")
+ntaxa(Ciliophora)
+
+Abun_By_Genus=tax_glom(Ciliophora, "Genus")
+
+df_Order_Genus<- Abun_By_Genus %>% psmelt() %>% group_by(Genus, Site, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+df_Class_Site_mean=dcast(df_Order_Genus, Genus ~ Site, value.var ="mean")
+df_Class_Site_sd=dcast(df_Order_Genus, Family ~ Site, value.var = "sd")
+
+
+
+
+
+f3=df_Order_Genus %>%
+  ggplot(aes(fill=Family, x=Site, y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("Ciliophora Families across sites")
+
+f3
+
+ggsave("Ciliphora_Average_relative_abundance_per_Site.pdf", width=25, height=10)
+
+
+
+
+
+River=subset_samples(rel_abun_HFP_KBT_2017_2019, Site=="E02")
+River_explore=subset_taxa(River, Class=="Chrysophyceae" | Class== "Cryptophyceae" | Class =="Chlorophyceae" | Class =="Euglenida")
+
+tax_table(River_explore)
+
+test=psmelt(River_explore)
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=SampleID, y=Abundance, fill=Family))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("River_Chrysophyceae_Cryptophyceae_Chlorophyceae")  + scale_fill_manual(values=palette2)
+
+ggsave("River_Chrysophyceae_Cryptophyceae_Chlorophyceae_Family.pdf", width=40, height=40)
+
+
+
+
+
+Abun_By_Class=tax_glom(River, "Class")
+
+df_Order_Class<- Abun_By_Class %>% psmelt() %>% group_by(OTU,Class, Site, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+Chrysophyceae
+
+##########
+Abun_By_Class=tax_glom(rel_abun_HFP_KBT_2017_2019, "Phylum")
+
+df_Order_Class<- Abun_By_Class %>% psmelt() %>% group_by(OTU,Phylum, Site, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+library(reshape2)
+df_Class_Site_mean=dcast(df_Order_Class, Site ~ Phylum, value.var ="mean")
+df_Class_Site_sd=dcast(df_Order_Class, OTU+Phylum ~ Enviro, value.var = "sd")
+
+write.csv(df_Class_Site_mean, "df_Class_Enviro_mean.csv")
+write.csv(df_Class_Site_sd, "df_Class_Enviro_sd.csv")
+
+
+library(dplyr)
+df_Order_Class_top=subset(df_Order_Class, mean>5)
+
+library(randomcoloR)
+n <- 140
+palette2 <- distinctColorPalette(n)
+
+
+
+
+f3=df_Order_Class_top %>%
+  ggplot(aes(fill=Phylum, x=Site, y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("Phylum >5% in Average Relative Abundance per Site")
+
+f3
+
+ggsave("Classes_1per_Average_relative_abundance_per_Site.svg", width=15, height=10)
+
+
+
+
+
+
+```
+
+
+
+
+
+```{r}
+
+
+Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019=subset_samples(Salmaso.Phyto.rel.abun, Year=="2017" | Year=="2018"| Year=="2019")
+
+
+##########
+Abun_By_Class=tax_glom(Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019, "Salmaso_Taxonomy")
+otu_table(Abun_By_Class)
+ntaxa(Abun_By_Class)
+nsamples(Abun_By_Class)
+
+df_Order_Class<- Abun_By_Class %>%psmelt() %>% group_by(OTU,Salmaso_Taxonomy,Site)%>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+
+
+
+df_Order_Class$Salmaso_Taxonomy=factor(df_Order_Class$Salmaso_Taxonomy, levels=c(
+"Chlorodendrophyceae",
+"Chloropicophyceae", "Mamiellophyceae", "Pyramimonadophyceae", "Bangiophyceae", "Zygnemophyceae","Euglenophyceae", "Pavlovophyceae", "Prymnesiophyceae", "Bolidophyceae", "Dictyochophyceae",  "Eustigmatophyceae", "Phaeophyceae","Pinguiophyceae", "Raphidophyceae", "Synurophyceae", "Xanthophyceae","Katablepharidaceae","Trebouxiophyceae","Pelagophyceae","Chlorophyceae","Chrysophyceae","Cryptophyceae","Dinoflagellata", "Diatoms"))
+
+
+df_Order_Class$Site <- factor(df_Order_Class$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+
+f3=df_Order_Class%>%
+  ggplot(aes(fill=as.factor(Salmaso_Taxonomy), x=as.factor(Site), y=mean)) + geom_bar(stat="identity")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.title.y = element_text(size = 20), axis.text=element_text(size=20), legend.text=element_text(size=20), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("") + theme(legend.title = element_blank()) + ylab("Average Relative Abundance (%)")
+
+f3
+
+ggsave("Phytoplankton_Salmaso_PerSite_newest_order.svg", width=15, height=10)
+
+
+
+
+
+diatoms_sub=subset(df_Order_Class, Salmaso_Taxonomy=="Diatoms")
+write.csv(diatoms_sub, "diatoms_Sub.csv")
+
+
+f3=diatoms_sub%>%
+  ggplot(aes(fill=as.factor(Salmaso_Taxonomy), x=as.factor(Site), y=mean) + geom_bar(stat="identity")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.title.y = element_text(size = 20), axis.text=element_text(size=20), legend.text=element_text(size=20), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("") + theme(legend.title = element_blank()) + ylab("Average Relative Abundance (%)")
+
+f3
+
+ggsave("Phytoplankton_Salmaso_PerSite_newest_order_just_Diatoms.pdf", width=15, height=10)
+
+
+
+
+
+ggplot(diatoms_sub, aes(x=Salmaso_Taxonomy, y = Site)) + 
+      geom_point(aes(size = log(mean)), alpha = 0.75, shape = 21) + 
+       scale_size_continuous(breaks = c(5,10,25,50), limits = c(2, 60), range = c(1,20), trans="log") + 
+      coord_flip() +
+       labs( x= "", y = "", size = "Frequency (%)", fill = "percent")  + 
+       theme(legend.key=element_blank(), 
+       axis.text.x = element_text(colour = "black", size = 18, face = "bold", angle = 90, vjust = 0.3, hjust = 1), 
+       axis.text.y = element_text(colour = "black", face = "bold", size = 18), 
+       legend.text = element_text(size = 18, face ="bold", colour ="black"), 
+       legend.title = element_text(size = 18, face = "bold"), panel.background = element_blank(), 
+       legend.position = "right", panel.grid.major.y = element_line(colour = "grey95")) 
+ggsave("Diatom_RA.pdf", width=14, height=8, units="in")
+
+
+
+
+
+```
+
+
+```{r}
+rel_abun_HFP_KBT_2017_2019_season=subset_samples(rel.abun, Timeseries=="HFP")
+nsamples(rel_abun_HFP_KBT_2017_2019_season)
+
+##########
+Abun_By_Class=tax_glom(rel_abun_HFP_KBT_2017_2019_season, "Class")
+Diatoms=subset_taxa(Abun_By_Class, Class=="Bacillariophyta")
+
+df_Order_Class<- Diatoms %>%psmelt() %>% select(OTU,SampleID, Abundance, Salmaso_Taxonomy,Site, Date.1)
+df_Order_Class$RelAbun=df_Order_Class$Abundance*100
+df_Order_Class$Date2 <- as.Date(df_Order_Class$Date.1, format="%m/%d/%y")
+
+
+
+HFP=subset(metadata_HFP18SASV, Timeseries=="HFP")
+
+p5=ggplot(df_Order_Class, aes(Date2, RelAbun))  +
+  geom_point(width = 0.1, aes(colour = Site))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),axis.title.x=element_blank()) +
+    geom_smooth(method=lm)+ylab("Diatom Relative Abundance (%)")+xlab("Date")+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), axis.text.x = element_text(angle = 90), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))
+p5
+ggsave("Diatom_Relative_Abundance.pdf", width=4.5, height=4)
+
+
+```
+
+
+
+```{r}
+
+rel_abun_HFP_KBT_2017_2019=subset_samples(rel.abun, Year=="2017" | Year=="2018"| Year=="2019")
+rel_abun_HFP_KBT_2017_2019_season=subset_samples(rel_abun_HFP_KBT_2017_2019, Site!="Pua" & Site!="SB")
+nsamples(rel_abun_HFP_KBT_2017_2019_season)
+
+##########
+Abun_By_Class=tax_glom(rel_abun_HFP_KBT_2017_2019_season, "Class")
+otu_table(Abun_By_Class)
+ntaxa(Abun_By_Class)
+nsamples(Abun_By_Class)
+
+Diatoms=subset_taxa(Abun_By_Class, Class=="Bacillariophyta")
+
+
+df_Order_Class<- Diatoms %>%psmelt() %>% group_by(OTU,Salmaso_Taxonomy,Site,Season.Aka)%>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+df_Order_Class$Site <- factor(df_Order_Class$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+
+f3=df_Order_Class%>%
+  ggplot(aes( x=as.factor(Site), y=mean)) + geom_bar(stat="identity") + facet_wrap(~Season.Aka) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.title.y = element_text(size = 20), axis.text=element_text(size=20), legend.text=element_text(size=20), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("") + theme(legend.title = element_blank()) + ylab("Diatom Average Relative Abundance (%)")
+
+f3
+
+ggsave("Diatom_abundance_relative_to_18S.pdf", width=10)
+
+```
+
+
+
+
+```{r}
+
+Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019=subset_samples(Salmaso.Phyto.rel.abun, Year=="2017" | Year=="2018"| Year=="2019")
+Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019_season=subset_samples(Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019, Site!="Pua" & Site!="SB")
+nsamples(Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019_season)
+
+##########
+Abun_By_Class=tax_glom(Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019_season, "Salmaso_Taxonomy")
+otu_table(Abun_By_Class)
+ntaxa(Abun_By_Class)
+nsamples(Abun_By_Class)
+
+
+df_Order_Class<- Abun_By_Class %>%psmelt() %>% group_by(OTU,Salmaso_Taxonomy,Site,Season.Aka)%>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+
+write.csv(df_Order_Class, "phyto_seasonal.csv")
+
+
+
+df_Order_Class$Salmaso_Taxonomy=factor(df_Order_Class$Salmaso_Taxonomy, levels=c("Chlorophyceae",
+"Cryptophyceae",
+"Chrysophyceae",
+"Diatoms",
+"Dinoflagellata",
+"Pelagophyceae",
+"Chlorodendrophyceae",
+"Chloropicophyceae", "Mamiellophyceae", "Pyramimonadophyceae", "Bangiophyceae", "Zygnemophyceae","Euglenophyceae", "Pavlovophyceae", "Prymnesiophyceae", "Bolidophyceae", "Dictyochophyceae",  "Eustigmatophyceae", "Phaeophyceae","Pinguiophyceae", "Raphidophyceae", "Synurophyceae", "Xanthophyceae","Katablepharidaceae","Trebouxiophyceae"))
+
+
+df_Order_Class$Site <- factor(df_Order_Class$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+
+f3=df_Order_Class%>%
+  ggplot(aes(fill=as.factor(Salmaso_Taxonomy), x=as.factor(Site), y=mean)) + geom_bar(stat="identity") + facet_wrap(~Season.Aka) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.title.y = element_text(size = 20), axis.text=element_text(size=20), legend.text=element_text(size=20), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("") + theme(legend.title = element_blank()) + ylab("Average Relative Abundance (%)")
+
+f3
+
+ggsave("Phytoplankton_Salmaso_PerSite_new_order_wetdry_Aka.pdf", width=15, height=10)
+
+
+
+
+df <- mutate(df_Order_Class, x = paste(Site,Season.Aka)) 
+df2=subset(df, Salmaso_Taxonomy=="Diatoms")
+
+
+f3=df2%>%
+  ggplot(aes(fill=as.factor(Salmaso_Taxonomy), x=x, y=mean)) + geom_bar(stat="identity")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.title.y = element_text(size = 20), axis.text=element_text(size=20), legend.text=element_text(size=20), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("") + theme(legend.title = element_blank()) + ylab("Average Relative Abundance (%)")
+
+f3
+
+
+
+```
+
+
+
+
+
+
+```{r}
+
+Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019=subset_samples(Salmaso.Phyto.rel.abun, Year=="2017" | Year=="2018"| Year=="2019")
+
+##########
+Abun_By_Class=tax_glom(Salmaso_Phyto_rel_abun_HFP_KBT_2017_2019, "Salmaso_Taxonomy")
+otu_table(Abun_By_Class)
+ntaxa(Abun_By_Class)
+nsamples(Abun_By_Class)
+
+df_Order_Class<- Abun_By_Class %>%psmelt() %>% group_by(OTU,Salmaso_Taxonomy,Site)%>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+
+
+
+df_Order_Class$Salmaso_Taxonomy=factor(df_Order_Class$Salmaso_Taxonomy, levels=c("Chlorophyceae",
+"Cryptophyceae",
+"Chrysophyceae",
+"Diatoms",
+"Dinoflagellata",
+"Pelagophyceae",
+"Chlorodendrophyceae",
+"Chloropicophyceae", "Mamiellophyceae", "Pyramimonadophyceae", "Bangiophyceae", "Zygnemophyceae","Euglenophyceae", "Pavlovophyceae", "Prymnesiophyceae", "Bolidophyceae", "Dictyochophyceae",  "Eustigmatophyceae", "Phaeophyceae","Pinguiophyceae", "Raphidophyceae", "Synurophyceae", "Xanthophyceae","Katablepharidaceae","Trebouxiophyceae"))
+
+
+df_Order_Class$Site <- factor(df_Order_Class$Site, levels=c("E02","M01","L07","L06","L09","L08","L01","M02","L05","Pua","L02","L03","L11", "M06","L04","M03", "L10","M04","M05", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+
+f3=df_Order_Class%>%
+  ggplot(aes(fill=as.factor(Salmaso_Taxonomy), x=as.factor(Site), y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.title.y = element_text(size = 20), axis.text=element_text(size=20), legend.text=element_text(size=20), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("") + theme(legend.title = element_blank()) + ylab("Average Relative Abundance (%)")
+
+f3
+
+ggsave("Phytoplankton_Salmaso_PerSite_new_order.svg", width=15, height=10)
+
+
+
+
+
+```
+
+
+
+
+
+
+
+```{r}
+
+
+
+
+
+
+
+
+Phyto_rel_abun_HFP_KBT_2017_2019=subset_samples(Phyto.rel.abun, Year=="2017" | Year=="2018"| Year=="2019")
+cbPalette9 <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#781156","#999999")
+
+
+test=psmelt(Phyto_rel_abun_HFP_KBT_2017_2019)
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=SampleID, y=Abundance, fill=Worden_Taxonomy))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("Everything HFP 18S")  + scale_fill_manual(values=cbPalette9)
+
+ggsave("Phytoplankton_all.pdf", width=40, height=40)
+
+
+
+
+##########
+Abun_By_Class=tax_glom(Phyto_rel_abun_HFP_KBT_2017_2019, "Worden_Taxonomy")
+
+df_Order_Class<- Phyto_rel_abun_HFP_KBT_2017_2019 %>% psmelt() %>% group_by(OTU, Worden_Taxonomy, Site) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+library(reshape2)
+df_Class_Site_mean=dcast(df_Order_Class, Site ~ Worden_Taxonomy, value.var ="mean")
+df_Class_Site_sd=dcast(df_Order_Class, OTU+Phylum ~ Enviro, value.var = "sd")
+
+write.csv(df_Class_Site_mean, "df_Class_Enviro_mean.csv")
+write.csv(df_Class_Site_sd, "df_Class_Enviro_sd.csv")
+
+
+library(dplyr)
+df_Order_Class_top=subset(df_Order_Class, mean>5)
+
+library(randomcoloR)
+n <- 140
+palette2 <- distinctColorPalette(n)
+
+
+
+df_Order_Class$Worden_Taxonomy=factor(df_Order_Class$Worden_Taxonomy, levels=c("Diatoms",
+"Bolidophyceae",
+"Dictyochophyceae",
+"Pelagophyceae",
+"Mamiellophyceae",
+"Prymnesiophyceae",
+"Pavlovophyceae",
+"Haptophyta",
+"Cryptophyta"))
+
+
+
+df_Order_Class$Site=factor(df_Order_Class$Site, levels=c("E02",
+"M01",
+"M02",
+"Pua",
+"L05",
+"L07",
+"L06",
+"L08",
+"L09",
+"L11","L03", "L04", "L02", "L10", "L01", "M06", "M05", "M04", "M03", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+
+
+f3=df_Order_Class%>%
+  ggplot(aes(fill=as.factor(Worden_Taxonomy), x=as.factor(Site), y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=cbPalette9) +ggtitle("Exclusive Phytoplankton According to Hamiliton et al., 2021") + theme(legend.title = element_blank()) + ylab("Average Relative Abundance (%)")
+
+f3
+
+ggsave("Phytoplankton_only.pdf", width=15, height=10)
+
+
+
+
+
+
+
+rel_abun_HFP_KBT_2017_2019=subset_samples(rel.abun, Year=="2017" | Year=="2018"| Year=="2019")
+
+df_Order_Class<- rel_abun_HFP_KBT_2017_2019 %>% psmelt() %>% group_by(OTU, All_Taxonomy, Site) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+
+
+
+
+df_Order_Class$Site=factor(df_Order_Class$Site, levels=c("E02",
+"M01",
+"M02",
+"Pua",
+"L05",
+"L07",
+"L06",
+"L08",
+"L09",
+"L11","L03", "L04", "L02", "L10", "L01", "M06", "M05", "M04", "M03", "E01", "HP1", "SB", "SR8", "SR2", "STO1"))
+
+
+
+library(randomcoloR)
+n <- 45
+palette2 <- distinctColorPalette(n)
+
+
+
+
+
+f3=df_Order_Class%>%
+  ggplot(aes(fill=All_Taxonomy, x=as.factor(Site), y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("All Taxa") + theme(legend.title = element_blank()) + ylab("Average Relative Abundance (%)")
+
+f3
+
+ggsave("All_Taxa.pdf", width=15, height=10)
+
+
+
+
+
+```
+
+
+
+
+```{r}
+
+
+
+test=psmelt(rel_abun_HFP_KBT_2017_2019)
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=SampleID, y=Abundance, fill=Large_Scale))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("Everything HFP 18S")  + scale_fill_manual(values=palette2)
+
+ggsave("everything_legend_large_scale.pdf", width=40, height=40)
+
+
+
+
+
+Abun_By_Class=tax_glom(rel_abun_HFP_KBT_2017_2019, "Class")
+
+df_Order_Class<- Abun_By_Class %>% psmelt() %>% group_by(OTU,Class, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+library(reshape2)
+df_Class_Site_mean=dcast(df_Order_Class, OTU+Class ~ Enviro, value.var ="mean")
+df_Class_Site_sd=dcast(df_Order_Class, OTU+Class ~ Enviro, value.var = "sd")
+
+write.csv(df_Class_Site_mean, "df_Class_Enviro_mean.csv")
+write.csv(df_Class_Site_sd, "df_Class_Enviro_sd.csv")
+
+
+library(dplyr)
+df_Order_Class_top=subset(df_Order_Class, mean>1)
+
+library(randomcoloR)
+n <- 26
+palette2 <- distinctColorPalette(n)
+
+
+
+
+f3=df_Order_Class_top %>%
+  ggplot(aes(fill=Class, x=Enviro, y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("Classes >1% in Average Relative Abundance per Site")
+
+f3
+
+ggsave("Classes_1per_Average_relative_abundance_per_Site.pdf", width=15, height=10)
+
+
+
+
+
+```
+
+
+
+
+
+```{r}
+
+
+
+
+KByT_18S=subset_samples(rel.abun, Timeseries=="KBT")
+nsamples(KByT_18S)
+#43
+
+HFP_18S=subset_samples(rel.abun, Timeseries=="HFP")
+nsamples(HFP_18S)
+#683
+
+Diatoms_all_rel=subset_taxa(rel.abun, Class=="Bacillariophyta")
+Diatoms_18S_HFP_KBT_2017_2019=subset_samples(Diatoms_all_rel, Year=="2017" | Year=="2018"| Year=="2019")
+
+
+Diatoms_18S_HFP=subset_taxa(HFP_18S, Class=="Bacillariophyta")
+
+Diatoms_18S_HFP_2014_2015=subset_samples(Diatoms_18S_HFP, Year=="2014" | Year=="2015")
+Diatoms_18S_HFP_2017_2019=subset_samples(Diatoms_18S_HFP, Year=="2017" | Year=="2018"| Year=="2019")
+
+Diatoms_18S_HFP_P=subset_samples(Diatoms_18S_HFP, Site=="P10" | Site=="P3")
+Diatoms_18S_HFP_M=subset_samples(Diatoms_18S_HFP, Site=="M05" | Site=="M01")
+nsamples(Diatoms_18S_HFP_M)
+
+
+test=psmelt(HFP_18S)
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=SampleID, y=Abundance, fill=Class))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("Everything HFP 18S")  + scale_fill_manual(values=palette2)
+
+ggsave("everything_legend_class.pdf", width=40, height=40)
+
+
+
+Diatoms_18S=subset_taxa(KByT_18S, Class=="Bacillariophyta")
+
+
+
+test=psmelt(Diatoms_18S)
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=SampleID, y=Abundance, fill=Genus))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("Bacillariophyta using 18S")  + scale_fill_manual(values=custom_final28)
+
+custom_final28 
+
+ggsave("Bacillariophyta_using_18S.pdf", width=14, height=10)
+
+
+library(randomcoloR)
+n <- 49
+palette2 <- distinctColorPalette(n)
+
+
+
+test2=psmelt(KByT_18S)
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test2, aes(x=SampleID, y=Abundance, fill=Class))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("All taxa 18S")  + scale_fill_manual(values=palette)
+
+
+
+
+Diatoms_18S_HFP_2014_2015
+
+All_Diatoms_Abs= subset_taxa(physeq_HFP18SASV_clean,Class=="Bacillariophyta")
+
+rel2All_Diatoms <- transform_sample_counts(All_Diatoms_Abs, function(OTU) OTU/sum(OTU))
+#write.csv(as.data.frame(otu_table(rel2All_phyto)), "otu_rel2All_phyto.csv") 
+
+
+Diatoms_18S_HFP_2014_2015=subset_samples(Diatoms_18S_HFP, Year=="2014" | Year=="2015")
+Diatoms_18S_HFP_2017_2019=subset_samples(Diatoms_18S_HFP, Year=="2017" | Year=="2018"| Year=="2019")
+
+
+Diatoms_18S_HFP_2014_2015=subset_samples(Diatoms_18S_HFP, Year=="2014" | Year=="2015")
+ntaxa(Diatoms_18S_HFP_2014_2015)
+by_genus=tax_glom(Diatoms_18S_HFP_2014_2015,"Genus")
+ntaxa(by_genus)
+write.csv(otu_table(by_genus), "By_Genus_Diatoms.csv")
+write.csv(tax_table(by_genus), "Tax_Genus_Diatoms.csv")
+write.csv(sample_data(by_genus), "Sample_data_Genus_Diatoms.csv")
+
+
+ntaxa(Diatoms_18S_HFP_2017_2019)
+by_genus=tax_glom(Diatoms_18S_HFP_2017_2019,"Genus")
+ntaxa(by_genus)
+write.csv(otu_table(by_genus), "By_Genus_Diatoms_HFP1719.csv")
+write.csv(tax_table(by_genus), "Tax_Genus_Diatoms_HFP1719.csv")
+write.csv(sample_data(by_genus), "Sample_data_Genus_Diatoms_HFP1719.csv")
+
+
+
+
+Diatoms_all_rel=subset_taxa(rel.abun, Class=="Bacillariophyta")
+Diatoms_18S_HFP_KBT_2017_2019=subset_samples(Diatoms_all_rel, Year=="2017" | Year=="2018"| Year=="2019")
+
+ntaxa(Diatoms_18S_HFP_KBT_2017_2019)
+by_genus=tax_glom(Diatoms_18S_HFP_KBT_2017_2019,"Genus")
+ntaxa(by_genus)
+write.csv(otu_table(by_genus), "By_Genus_Diatoms_KBTHFP1719.csv")
+write.csv(tax_table(by_genus), "Tax_Genus_Diatoms_KBTHFP1719.csv")
+write.csv(sample_data(by_genus), "Sample_data_Genus_Diatoms_KBTHFP1719.csv")
+
+
+
+
+
+
+
+cyclo_chae_2017_2019=subset_taxa(Diatoms_18S_HFP_2017_2019, Genus=="Cyclotella"| Genus== "Chaetoceros")
+ntaxa(cyclo_chae_2017_2019)
+
+cyclo_2017_2019=subset_taxa(Diatoms_18S_HFP_2017_2019, Genus=="Cyclotella")
+ntaxa(cyclo_2017_2019)
+
+
+cyclo_chae_2014_2015=subset_taxa(Diatoms_18S_HFP_2014_2015, Genus=="Cyclotella"| Genus== "Chaetoceros")
+
+
+cbPalette9 <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#781156","#999999")
+
+
+test=psmelt(rel2All_Diatoms)
+test$Date.1 <- as.Date(test$Date.1,format = "%m/%d/%y")
+
+
+
+test$Diatoms_Curated_Top_10=factor(test$Diatoms_Curated_Top_10, levels=c("Chaetoceros",
+"Cyclotella",
+"Minutocellus",
+"Navicula",
+"Pseudo-nitzschia",
+"Rhizosolenia",
+"Skeletonema",
+"Thalassiosira",
+"Other"))
+
+
+
+
+
+
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=SampleID, y=Abundance, fill=as.factor(Diatoms_Curated_Top_10)))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("rel2All_Diatoms")  + scale_fill_manual(values=cbPalette9)+ylab("rel2All_Diatoms") + theme(legend.title = element_blank())
+
+ggsave("rel2All_Diatoms_2_Curated_Top10.pdf", width=14, height=24)
+
+
+
+
+
+comparisons=subset_samples(rel2All_Diatoms, Site=="L11"| Site=="P8")
+nsamples(comparisons)
+comparisons=subset_samples(comparisons, SampleID!="HFP_20141023_OM2_B")
+nsamples(comparisons)
+
+comparisons2=tax_glom(comparisons, "Genus")
+tax_table(comparisons2)
+
+test=psmelt(comparisons2)
+test$Date.1 <- as.Date(test$Date.1,format = "%m/%d/%y")
+
+
+
+test2=subset(test,Genus=="Cyclotella" |Genus=="Chaetoceros")
+test2=subset(test2,Site=="P8" | Site=="L11")
+
+
+ ggplot(data=test2, aes(x=SampleID, y=Abundance, group=Genus, color=Genus)) +
+    geom_line(size=2) +theme(axis.text.x = element_text(angle = 90)) +ggtitle("")  + facet_wrap(~Project+Enviro, scales="free_x") + scale_fill_manual(values=palette2)+ylab("Abundance Relative to All Diatoms")+xlab("Date") + theme(legend.title = element_blank())+
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+theme(text = element_text(size=14), axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1))
+
+ggsave("Chaetoceros_Cyclotell.pdf", width=8, height=5)
+
+ 
+
+
+
+
+```
+
+```{r}
+
+ 
+ 
+ 
+
+comparisons=subset_samples(rel2All_Diatoms, Site=="L11"| Site=="P8")
+nsamples(comparisons)
+comparisons=subset_samples(comparisons, SampleID!="HFP_20141023_OM2_B")
+nsamples(comparisons)
+test=psmelt(comparisons)
+test$Date.1 <- as.Date(test$Date.1,format = "%m/%d/%y")
+
+
+
+test$Diatoms_Curated_Top_10=factor(test$Diatoms_Curated_Top_10, levels=c("Chaetoceros",
+"Cyclotella",
+"Minutocellus",
+"Navicula",
+"Pseudo-nitzschia",
+"Rhizosolenia",
+"Skeletonema",
+"Thalassiosira",
+"Other"))
+
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=Date.1, y=Abundance, color=as.factor(Diatoms_Curated_Top_10)))
+p + facet_wrap(~Project+Enviro, scales="free_x") + geom_line() +theme(axis.text.x = element_text(angle = 90)) +ggtitle("")  + scale_fill_manual(values=cbPalette9)+ylab("Abundance Relative to All Diatoms")+xlab("Date") + theme(legend.title = element_blank())+
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+theme(text = element_text(size=14), axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1))
+
+
+
+
+
+
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=SampleID, y=Abundance, fill=as.factor(Diatoms_Curated_Top_10)))
+p + facet_wrap(~Project+Enviro, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("")  + scale_fill_manual(values=cbPalette9)+ylab("Abundance Relative to All Diatoms")+xlab("Date") + theme(legend.title = element_blank())+
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+theme(text = element_text(size=14), axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1))
+
+ggsave("rel2All_Diatoms_2_Curated_Top10.pdf", width=11, height=10)
+
+
+
+
+
+
+
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=SampleID, y=Abundance, fill=Diatoms_Curated))
+p + facet_wrap(~Project+Enviro, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("")  + scale_fill_manual(values=palette2)+ylab("Abundance Relative to All Diatoms")+xlab("Date") + theme(legend.title = element_blank())+
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+theme(text = element_text(size=14), axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1))
+
+ggsave("rel2All_Diatoms_2_Curated.pdf", width=11, height=10)
+
+
+
+
+
+
+
+Abun_By_Genus=tax_glom(Diatoms_18S_HFP_KBT_2017_2019, "Class")
+df_Genus_total <- Abun_By_Genus %>% psmelt() %>% group_by(Diatoms_Curated,Site, Enviro) %>% summarise(mean = mean(Abundance), sd=sd(Abundance)) 
+
+df_Genus_total$percent_total_mean=df_Genus_total$mean*100
+df_Genus_total$percent_total_SD=df_Genus_total$sd*100
+
+write.csv(df_Genus_total,"Top_Diatom_Species_by_Site.csv")
+
+library(reshape2)
+
+df_Order_Site_mean=dcast(df_Genus_total, Diatoms_Curated ~ Site, value.var ="mean")
+df_Order_Site_sd=dcast(df_Genus_total, Diatoms_Curated ~ Site, value.var = "sd")
+
+write.csv(df_Order_Site_mean, "Top_Diatoms_mean_Site.csv")
+write.csv(df_Order_Site_sd, "df_Genus_Site_sd.csv")
+
+
+Test <- df_Genus_total%>% group_by(Diatoms_Curated) %>% summarise(mean = mean(percent_total_mean), sd=sd(percent_total_mean)) 
+
+
+
+
+
+
+
+test=psmelt(Diatoms_18S_HFP_2014_2015)
+test$Date.1 <- as.Date(test$Date.1,format = "%m/%d/%y")
+
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=Date.1, y=Abundance, fill=Genus))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack") +theme(axis.text.x = element_text(angle = 90)) +ggtitle("Bacillariophyta using 18S (2014 to 2015)")  + scale_fill_manual(values=palette2)+ylab("Abundance Relative to All Bacillariophyta")
+
+
+
+ggsave("Bacillariophyta_using_18S_2014_2015.pdf", width=14, height=10)
+
+
+
+top5<- names(sort(taxa_sums(Diatoms_18S_HFP_2014_2015), decreasing=TRUE))[1:7]
+
+#ps.top20 <- transform_sample_counts(Cells_physeq_KByt2, function(OTU) OTU/sum(OTU))
+ps.top5<- prune_taxa(top5, Diatoms_18S_HFP_2014_2015)
+tax_table(ps.top5)
+plot_bar(ps.top5, fill="Genus") + facet_wrap(~Site, scales="free_x")
+ggsave("Top5byGenus_Diatoms_18S_HFP_2014_2015.pdf", width=14, height=15)
+
+###make sure the right otut able is in here rel abun without chloro, cell # 
+Abun_By_Genus=tax_glom(Diatoms_18S_HFP_2014_2015, "Genus")
+df_Genus_total <- Abun_By_Genus %>% psmelt() %>% group_by(OTU,Genus) %>% summarise(mean = mean(Abundance), sd=sd(Abundance)) 
+
+df_Genus_total$percent_total_mean=df_Genus_total$mean*100
+df_Genus_total$percent_total_SD=df_Genus_total$sd*100
+
+write.csv(df_Genus_total,"df_Rel_Top5byGenus_Diatoms_18S_HFP_2014_2015.csv")
+
+
+
+
+test=psmelt(Diatoms_18S_HFP_2017_2019)
+test$Date.1 <- as.Date(test$Date.1,format = "%m/%d/%y")
+
+#test$Date1 <- as.Date(test$Date1,format = "%m/%d/%y")
+p <- ggplot(data=test, aes(x=Date.1, y=Abundance, fill=Genus))
+p + facet_wrap(~Site, scales="free_x") + geom_bar(aes(), stat="identity", position="stack", width=20) +theme(axis.text.x = element_text(angle = 90)) +ggtitle("Bacillariophyta using 18S (2017 to 2019)")  + scale_fill_manual(values=palette2) +ylab("Abundance Relative to All Bacillariophyta")
+
+ggsave("Bacillariophyta_using_18S_2017_2019.pdf", width=14, height=10)
+
+
+
+
+
+
+
+top5<- names(sort(taxa_sums(Diatoms_18S_HFP_2017_2019), decreasing=TRUE))[1:7]
+
+#ps.top20 <- transform_sample_counts(Cells_physeq_KByt2, function(OTU) OTU/sum(OTU))
+ps.top5<- prune_taxa(top5, Diatoms_18S_HFP_2017_2019)
+tax_table(ps.top5)
+plot_bar(ps.top5, fill="Genus") + facet_wrap(~Site, scales="free_x")
+ggsave("Top5byGenus_Bacillariophyta_using_18S_2017_2019.pdf", width=14, height=15)
+
+###make sure the right otut able is in here rel abun without chloro, cell # 
+Abun_By_Genus=tax_glom(Diatoms_18S_HFP_2017_2019, "Genus")
+df_Genus_total <- Abun_By_Genus %>% psmelt() %>% group_by(OTU,Genus) %>% summarise(mean = mean(Abundance), sd=sd(Abundance)) 
+
+df_Genus_total$percent_total_mean=df_Genus_total$mean*100
+df_Genus_total$percent_total_SD=df_Genus_total$sd*100
+
+write.csv(df_Genus_total,"df_Rel_Top5byGenus_Diatoms_18S_HFP_2017_2019.csv")
+
+Abun_By_Genus=tax_glom(Diatoms_18S_HFP_2017_2019, "Class")
+df_Genus_total <- Abun_By_Genus %>% psmelt() %>% group_by(OTU,Enviro,Class) %>% summarise(mean = mean(Abundance), sd=sd(Abundance)) 
+
+df_Genus_total$percent_total_mean=df_Genus_total$mean*100
+df_Genus_total$percent_total_SD=df_Genus_total$sd*100
+
+write.csv(df_Genus_total,"df_Rel_Top5byGenus_Diatoms_18S_HFP_2017_2019.csv")
+
+
+
+
+
+
+
+Abun_By_Genus=tax_glom(HFP_18S, "Genus")
+
+
+
+df_Order_Site<- Abun_By_Genus %>% psmelt() %>% group_by(OTU,Genus,Site) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+library(reshape2)
+
+df_Order_Site_mean=dcast(df_Order_Site, OTU+Genus ~ Site, value.var ="mean")
+df_Order_Site_sd=dcast(df_Order_Site , OTU+Genus ~ Site, value.var = "sd")
+
+write.csv(df_Order_Site_mean, "df_Genus_Site_mean.csv")
+write.csv(df_Order_Site_sd, "df_Genus_Site_sd.csv")
+
+
+###by enviro
+
+df_Order_Site<- Abun_By_Genus %>% psmelt() %>% group_by(OTU,Genus,Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+library(reshape2)
+
+df_Order_Site_mean=dcast(df_Order_Site, OTU+Genus ~ Enviro, value.var ="mean")
+df_Order_Site_sd=dcast(df_Order_Site , OTU+Genus ~ Enviro, value.var = "sd")
+
+write.csv(df_Order_Site_mean, "df_Genus_Enviro_mean.csv")
+write.csv(df_Order_Site_sd, "df_Genus_Enviro_sd.csv")
+
+
+###horizontal figure
+
+
+
+
+Abun_By_Class=tax_glom(HFP_18S, "Class")
+
+df_Order_Class<- Abun_By_Class %>% psmelt() %>% group_by(OTU,Class, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+library(reshape2)
+df_Class_Site_mean=dcast(df_Order_Class, OTU+Class ~ Enviro, value.var ="mean")
+df_Class_Site_sd=dcast(df_Order_Class, OTU+Class ~ Enviro, value.var = "sd")
+
+write.csv(df_Class_Site_mean, "df_Class_Enviro_mean.csv")
+write.csv(df_Class_Site_sd, "df_Class_Enviro_sd.csv")
+
+
+library(dplyr)
+df_Order_Class_top=subset(df_Order_Class, mean>1)
+
+library(randomcoloR)
+n <- 26
+palette2 <- distinctColorPalette(n)
+
+
+
+
+f3=df_Order_Class_top %>%
+  ggplot(aes(fill=Class, x=Enviro, y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette2) +ggtitle("Classes >1% in Average Relative Abundance per Site")
+
+f3
+
+ggsave("Classes_1per_Average_relative_abundance_per_Site.pdf", width=15, height=10)
+
+
+
+
+
+
+
+
+Abun_By_Genus=tax_glom(HFP_18S, "Genus")
+
+df_Order_Genus<- Abun_By_Genus %>% psmelt() %>% group_by(OTU,Genus, Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+
+
+
+
+library(dplyr)
+df_Order_Genus_top=subset(df_Order_Genus, mean>1)
+
+library(randomcoloR)
+n <- 50
+palette3 <- distinctColorPalette(n)
+
+
+
+
+
+f3=df_Order_Genus_top %>%
+  ggplot(aes(fill=Genus, x=Enviro, y=mean)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank())+ theme(axis.text=element_text(size=14), legend.text=element_text(size=14), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1)) + scale_fill_manual(values=palette3) +ggtitle("Genus >1% in Average Relative Abundance per Site")
+
+f3
+
+ggsave("Genus_5per_Average_relative_abundance_per_Site.pdf", width=15, height=10)
+
+
+```
+
+
+
+
+```{r}
+
+##########################################################
+#########presence absence stacked barcharts
+##########################################################
+Diatoms_18S_HFP_KBT_2017_2019_glom=tax_glom(Diatoms_18S_HFP_KBT_2017_2019, "Genus")
+Diatoms_18S_HFP_KBT_2017_2019_glom_binary <- transform_sample_counts(Diatoms_18S_HFP_KBT_2017_2019_glom, function(abund) 1*(abund>0))
+e=otu_table(Diatoms_18S_HFP_KBT_2017_2019_glom_binary)
+tax_table(Diatoms_18S_HFP_KBT_2017_2019_glom_binary)
+ntaxa(Diatoms_18S_HFP_KBT_2017_2019_glom_binary)
+
+otu_table(Diatoms_18S_HFP_KBT_2017_2019_glom_binary)
+
+write.csv(e, "test.csv")
+
+q=psmelt(Diatoms_18S_HFP_KBT_2017_2019_binary)
+dim(q)
+dim(df_55)
+
+
+df_55<-Diatoms_18S_HFP_KBT_2017_2019_glom_binary %>% psmelt() %>% group_by(Genus, Site) %>% summarise(sum = sum(Abundance)) 
+
+test<-Diatoms_18S_HFP_KBT_2017_2019_glom_binary%>% psmelt() %>% group_by( Site) %>% count(Site)
+test$count_real=test$n/30
+
+library("reshape2")
+
+lucky2=dcast(df_55, Site ~ Genus, value.var = "sum")
+
+sketchy=left_join(test, lucky2, by="Site")
+
+write.csv(sketchy, "woof.csv")
+
+
+
+
+
+heatmap=read.csv("heatmap_occ_diatoms.csv",header=TRUE)
+
+test_heatmap=dcast(heatmap, Order ~ Enviro2, value.var ="percent_mean")
+samp.with.rownames <- data.frame(heatmap[,-1], row.names=heatmap[,1])
+samp.with.rownames=as.matrix(samp.with.rownames)
+
+library("RColorBrewer")
+col <- colorRampPalette(brewer.pal(10, "RdYlBu"))(256)
+heatmap(samp.with.rownames , scale = "none", col =  col)
+
+pdf("occurrence_diatoms.pdf")
+pheatmap(samp.with.rownames)
+dev.off()
+
+library(pheatmap)
+
+
+
+
+
+
+```
+
+
+
+
+
+
+#https://rstudio-pubs-static.s3.amazonaws.com/496936_2cda5f07e6044d7e9d521893e484a558.html
+https://jonlefcheck.net/2012/10/24/nmds-tutorial-in-r/
+
+
+
+
+
+
+```{r}
+
+
+
+Diatoms_enviro_2014_2015=read.csv("Diatoms_OTU_Sample_data_Genus_Diatoms_v3.csv",header=TRUE)
+
+library(tidyverse)
+library(vegan)
+
+clean_Diatoms_enviro_2014_2015=Diatoms_enviro_2014_2015%>%drop_na()
+test=clean_Diatoms_enviro_2014_2015%>%distinct(Date)
+
+com = clean_Diatoms_enviro_2014_2015[,29:58]
+env = clean_Diatoms_enviro_2014_2015[,20:28]
+
+#convert com to a matrix
+m_com = as.matrix(com)
+
+#nmds code
+set.seed(123)
+nmds = metaMDS(m_com, distance = "bray", k=2, wascores = TRUE)
+nmds
+
+en = envfit(nmds, env, permutations = 999, na.rm = TRUE)
+
+en
+
+round(mds$eig*100/sum(mds$eig),1)
+
+svg(file = "Diatoms_enviro_2014_2015.svg",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6)
+
+
+plot(nmds, type="text", cex=0.5)
+plot(en, col="blue")
+dev.off()
+
+get.wd()
+
+
+
+svg(file = "Diatoms_enviro_2014_2015.svg",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6)
+
+plot(nmds, "sites")   # Produces distance 
+orditorp(nmds, "sites", col="red")   # Gives points labels
+orditorp(nmds, "species", col="blue") 
+plot(en, col="purple")
+dev.off()
+
+
+
+
+pdf(file = "Diatoms_enviro_2014_2015.pdf",   # The directory you want to save the file in
+    width = 20, # The width of the plot in inches
+    height = 20)
+
+plot(nmds$points, col="grey", bg="red", pch=16 )   # Produces distance   # Gives points labels
+orditorp(nmds, "species", col="red") 
+plot(en, col="blue")
+dev.off()
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+
+
+Diatoms_enviro_2017_2019_HFP=read.csv("Sample_data_Genus_Diatoms_HFP1719_V2.csv",header=TRUE)
+clean_Diatoms_enviro_2017_2019_HFP=Diatoms_enviro_2017_2019_HFP%>%drop_na()
+com = clean_Diatoms_enviro_2017_2019_HFP[,19:44]
+env = clean_Diatoms_enviro_2017_2019_HFP[,2:18]
+
+#convert com to a matrix
+m_com = as.matrix(com)
+
+#nmds code
+set.seed(123)
+nmds = metaMDS(m_com, distance = "bray")
+nmds
+en = envfit(nmds, env, permutations = 999, na.rm = TRUE)
+
+en
+
+round(mds$eig*100/sum(mds$eig),1)
+
+svg(file = "Diatoms_enviro_2017_2019_HFP.svg",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6)
+
+plot(nmds, "sites")   # Produces distance 
+orditorp(nmds, "sites", col="red")   # Gives points labels
+orditorp(nmds, "species", col="blue") 
+plot(en, col="purple")
+dev.off()
+
+pdf(file = "Diatoms_enviro_2017_2019_HFP.pdf",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6)
+
+plot(nmds$points, col="grey", bg="red", pch=16, main="2017-2019 HFP" )   # Produces distance   # Gives points labels
+orditorp(nmds, "species", col="red") 
+plot(en, col="blue")
+dev.off()
+
+
+
+island.spp_cor <-
+  cor(com,
+      nmds$points,
+      use = "complete.obs",
+      method = "pearson")
+# Shepards test/goodness of fit
+goodness(nmds)
+stressplot(nmds)
+
+
+#https://stackoverflow.com/questions/49223740/cumulative-variance-explained-for-nmds-in-r
+
+
+#######sig only 
+
+Diatoms_enviro_2017_2019_HFP=read.csv("Sample_data_Genus_Diatoms_HFP1719_v3.csv",header=TRUE)
+clean_Diatoms_enviro_2017_2019_HFP=Diatoms_enviro_2017_2019_HFP%>%drop_na()
+com = clean_Diatoms_enviro_2017_2019_HFP[,15:40]
+env = clean_Diatoms_enviro_2017_2019_HFP[,2:14]
+
+#convert com to a matrix
+m_com = as.matrix(com)
+
+#nmds code
+set.seed(123)
+nmds = metaMDS(m_com, distance = "bray")
+nmds
+en = envfit(nmds, env, permutations = 999, na.rm = TRUE)
+
+en
+
+round(mds$eig*100/sum(mds$eig),1)
+
+svg(file = "Diatoms_enviro_2017_2019_HFP_sig_factos_only.svg",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6)
+
+plot(nmds, "sites",  main="2017-2019 HFP")   # Produces distance 
+orditorp(nmds, "sites", col="red")   # Gives points labels
+orditorp(nmds, "species", col="blue") 
+plot(en, col="purple")
+dev.off()
+
+pdf(file = "Diatoms_enviro_2017_2019_HFP_sig_factors_only.pdf",   # The directory you want to save the file in
+    width = 9, # The width of the plot in inches
+    height = 9)
+
+plot(nmds$points, col="grey", bg="red", pch=16, main="2017-2019 HFP" )   # Produces distance   # Gives points labels
+orditorp(nmds, "species", col="red") 
+plot(en, col="blue")
+dev.off()
+
+
+island.spp_cor <-
+  cor(com,
+      nmds$points,
+      use = "complete.obs",
+      method = "pearson")
+# Shepards test/goodness of fit
+goodness(nmds)
+stressplot(nmds)
+
+
+don=subset(Diatoms_enviro_2017_2019_HFP, X!="HFP_20171209_E01")
+
+ggscatter(don, x="Haslea", y="H4SiO4.uM")
+
+
+```
+
+
+```{r}
+
+
+Diatoms_enviro_2017_2019_HFP=read.csv("Sample_data_Genus_Diatoms_HFP1719_v4.csv",header=TRUE)
+clean_Diatoms_enviro_2017_2019_HFP=Diatoms_enviro_2017_2019_HFP%>%drop_na()
+com = clean_Diatoms_enviro_2017_2019_HFP[,15:24]
+env = clean_Diatoms_enviro_2017_2019_HFP[,2:14]
+
+#convert com to a matrix
+m_com = as.matrix(com)
+
+#nmds code
+set.seed(123)
+nmds = metaMDS(m_com, distance = "bray")
+nmds
+en = envfit(nmds, env, permutations = 999, na.rm = TRUE)
+
+en
+
+round(mds$eig*100/sum(mds$eig),1)
+
+svg(file = "Select_Diatoms_enviro_2017_2019_HFP_sig_factos_only.svg",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6)
+
+plot(nmds, "sites",  main="2017-2019 HFP")   # Produces distance 
+orditorp(nmds, "sites", col="red")   # Gives points labels
+orditorp(nmds, "species", col="blue") 
+plot(en, col="purple")
+dev.off()
+
+pdf(file = "Select_Diatoms_enviro_2017_2019_HFP_sig_factors_only.pdf",   # The directory you want to save the file in
+    width = 9, # The width of the plot in inches
+    height = 9)
+
+plot(nmds$points, col="grey", bg="red", pch=16, main="2017-2019 HFP" )   # Produces distance   # Gives points labels
+orditorp(nmds, "species", col="red") 
+plot(en, col="blue")
+dev.off()
+
+
+island.spp_cor <-
+  cor(com,
+      nmds$points,
+      use = "complete.obs",
+      method = "pearson")
+# Shepards test/goodness of fit
+goodness(nmds)
+stressplot(nmds)
+
+
+don=subset(Diatoms_enviro_2017_2019_HFP, X!="HFP_20171209_E01")
+
+ggscatter(don,  x="H4SiO4.uM", y="Navicula", ylab="Skeletonema Relative Abundance", xlab="pH")
+ggsave("Skeletonema_RA.pdf")
+
+```
+
+
+
+
+
+
+
+```{r}
+
+
+Diatoms_enviro_2017_2019_KBTHFP=read.csv("Sample_data_Genus_Diatoms_KBTHFP1719_v2.csv",header=TRUE)
+
+library(tidyverse)
+library(vegan)
+
+clean_Diatoms_enviro_2017_2019_KBTHFP=Diatoms_enviro_2017_2019_KBTHFP%>%drop_na()
+
+
+com = clean_Diatoms_enviro_2017_2019_KBTHFP[,8:37]
+env = clean_Diatoms_enviro_2017_2019_KBTHFP[,2:7]
+
+#convert com to a matrix
+m_com = as.matrix(com)
+
+#nmds code
+set.seed(123)
+nmds = metaMDS(m_com, distance = "bray")
+nmds
+
+
+
+en = envfit(nmds, env, permutations = 999, na.rm = TRUE)
+
+en
+
+round(mds$eig*100/sum(mds$eig),1)
+
+
+
+
+svg(file = "Diatoms_enviro_2017_2019_KBTHFP.svg",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6)
+
+plot(nmds, "sites")   # Produces distance 
+orditorp(nmds, "sites", col="red")   # Gives points labels
+orditorp(nmds, "species", col="blue") 
+plot(en, col="purple")
+dev.off()
+
+
+
+
+pdf(file = "Diatoms_enviro_2017_2019_KBTHFP.pdf",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6)
+
+plot(nmds$points, col="grey", bg="red", pch=16, main="2017-2019 KBT HFP" )   # Produces distance   # Gives points labels
+orditorp(nmds, "species", col="red") 
+plot(en, col="blue")
+dev.off()
+
+
+
+island.spp_cor <-
+  cor(com,
+      nmds$points,
+      use = "complete.obs",
+      method = "pearson")
+# Shepards test/goodness of fit
+goodness(nmds)
+stressplot(nmds)
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+Site_tally <- metadata_Becca%>%group_by(Project,Site)%>%tally()
+
+
+GP.ord <- ordinate(HFP_18S, "NMDS", "bray")
+
+
+library(randomcoloR)
+n <- 13
+palette2 <- distinctColorPalette(n)
+
+
+
+p2 = plot_ordination(HFP_18S, GP.ord, type="samples", color="Enviro", label="SampleID") + scale_color_manual(values=palette2)
+p2
+ggsave("HFP_18S_nmds_enviro.pdf")
+
+```
+
+
+
+```{r}
+AllPhyto_binary <- transform_sample_counts(try,function(abund) 1*(abund>0))
+e=otu_table(AllPhyto_binary)
+write.csv(e, "All18S_ASV_binary.csv")
+
+nsamples(try)
+
+AllPhyto_abun_ASV <- All_phyto %>% psmelt() %>% group_by(OTU,Enviro) %>% summarise(mean = round(mean(Abundance)*100, 1), sd=round(sd(Abundance)*100, 1)) 
+AllPhyto_abun_ASV_enviro=reshape2::dcast(AllPhyto_abun_ASV, OTU ~ Enviro2, value.var ="mean")
+
+
+AllPhyto_binary_count <- AllPhyto_binary %>% psmelt() %>% group_by(OTU) %>% summarise(sum = sum(Abundance)) 
+AllPhyto_binary_enviro=dcast(AllPhyto_binary, OTU ~ Enviro2, value.var ="sum")
+
+```
+
+
+We will make sure this ASV has at least 1 read count in all of the samples 
+#45c7b719be8ea0cbc41bfc0506d0d45b 
+This is because I we are getting an error described here: https://www.biostars.org/p/440379/
+Editing will make sure we have one "gene count" without all zeros 
+#1205c5b778be54d9e315db1a3734860f
+I also edited this realizing the ASV before does not have a genus so, it could not be an effective solution to solving this issue of zeros for all genes when using tax_glom
+
+
+```{r}
+
+
+
+
+# read in otu table
+otu_table_DESEQ= read.csv("OTU_TABLE_CLEAN_DESEQ.csv", sep=",", row.names=1) 
+otu_table_DESEQ = as.matrix(otu_table_DESEQ)
+
+# read in taxonomy
+# seperated by kingdom phylum class order family genus species 
+
+#you also need to edit your taxonomy table by separating each column by a comma so that you don't have just one column with all the taxonomic levels. Relabel to be  "Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species" as the column headers 
+
+#note this was the original taxonomy, before using Pr2
+taxonomy_DESEQ = read.csv("TAXA_TABLE_CLEAN_DESEQ.csv", sep=",", row.names=1) 
+
+
+taxonomy_DESEQ = as.matrix(taxonomy_DESEQ)
+
+
+metadata_DESEQ=read.csv("Sample_data_CLEAN_DESEQ.csv", header=TRUE, fill=TRUE)
+
+rownames(metadata_DESEQ) <- metadata_DESEQ$SampleID
+metadata_DESEQ$SampleID
+META_DESEQ= sample_data(metadata_DESEQ)
+nsamples(META_DESEQ)
+#748
+
+#read in tree
+phy_treeDESEQ = read_tree("/Users/sarahtucker/Documents/KByt/Analysis_18S/125-unrooted-tree.nwk", package="phyloseq")
+
+# import as phyloseq objects
+OTU_DESEQ = otu_table(otu_table_DESEQ, taxa_are_rows = TRUE) 
+TAX_DESEQ = tax_table(taxonomy_DESEQ)
+
+
+physeq_DESEQ = phyloseq(OTU_DESEQ, TAX_DESEQ, phy_treeDESEQ)
+
+physeq_DESEQ=merge_phyloseq(physeq_DESEQ, META_DESEQ)
+ntaxa(physeq_DESEQ)
+#2768
+
+
+
+
+
+
+library(DESeq2)
+
+#https://micca.readthedocs.io/en/latest/phyloseq.html
+
+KByT_18S=subset_samples(physeq_HFP18SASV_clean, Timeseries=="KBT")
+nsamples(KByT_18S)
+#43
+
+HFP_18S_abs=subset_samples(physeq_HFP18SASV_clean, Timeseries=="HFP")
+nsamples(HFP_18S)
+#683
+
+HFP_2014_2015_abs=subset_samples(HFP_18S_abs, Year=="2014" | Year=="2015")
+HFP_2017_2019_abs=subset_samples(HFP_18S_abs, Year=="2017" | Year=="2018"| Year=="2019")
+
+
+write.csv(otu_table(try), "try.csv")
+
+
+try=tax_glom(physeq_DESEQ, "Class")
+
+
+HFP_18S_abs=subset_samples(try, Timeseries=="HFP")
+nsamples(HFP_18S)
+HFP_2017_2019_abs=subset_samples(HFP_18S_abs, Year=="2017" | Year=="2018"| Year=="2019")
+
+
+
+ds = phyloseq_to_deseq2(HFP_2017_2019_abs, ~Season)
+ds_pol = DESeq(ds, fitType='mean')
+alpha = 0.05
+res = results(ds_pol, alpha=alpha)
+alpha = 0.05
+sigtab = res[which(res$padj < alpha), ]
+
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(HFP_2017_2019_abs)[rownames(sigtab), ], "matrix"))
+head(sigtab)
+write.csv(sigtab, "physeq_DESEQ_Season_Class_glom.csv")
+
+
+
+
+
+
+
+
+
+
+
+
+
+write.csv(otu_table(HFP_18S_abs), "otu_table_HFP_18S_abs.csv")
+
+diagdds_pol = phyloseq_to_deseq2(physeq_DESEQ, ~Enviro)
+diagdds_pol = DESeq(diagdds_pol, fitType='mean')
+
+alpha = 0.05
+res = results(diagdds_pol, contrast=c("Enviro", "Ocean_Makaha", "River_Makaha"), alpha=alpha)
+res = res[order(res$padj, na.last=NA), ]
+res_sig = res[(res$padj < alpha), ]
+res_sig
+
+
+
+
+res = results(diagdds_pol)
+alpha = 0.05
+sigtab = res[which(res$padj < alpha), ]
+
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(physeq_DESEQ)[rownames(sigtab), ], "matrix"))
+head(sigtab)
+write.csv(sigtab, "physeq_DESEQ_River_Ocean_makaha.csv")
+
+par(mar=c(8,5,2,2))
+pdf("boxplot.pdf")
+boxplot(log10(assays(diagdds_pol)[["cooks"]]), range=0, las=2)
+
+
+All_phyto
+sample_data(All_phyto)
+
+library(DESeq2)
+
+
+
+
+
+
+##########################################
+####This is to visualize the results of DeSeq
+#########################################
+#note this is only 2 log fold change not both negative and postive change 
+#posigtab = sigtab[sigtab[, "log2FoldChange"] > 2,]
+#posigtab = posigtab[, c("baseMean", "log2FoldChange", "lfcSE", "padj", "Phylum", "Class", "Family", "Genus","Species", "ASV")]
+#write.csv(posigtab, "DeSeq2_results_Season.csv")
+
+
+
+colors_sig=c("Bathycoccus"="darkolivegreen4", 
+"Chlorellales"="greenyellow",
+"Chloropicon"="darkolivegreen3",
+"Mamiellaceae" ="forestgreen",
+"Marsupiomonas"="darkseagreen",
+"Pyramimonadales"="palegreen1", 
+"Cyanobium"="deepskyblue",
+"Prochlorococcus"="navy",
+"Synechococcus"="dodgerblue3",
+"Cryptomonadales"="orangered", 
+"Isochrysis"="mediumvioletred",
+"Phaeocystis"="thistle2",
+"Prymnesiales"="red",
+"Prymnesiophyceae"="orchid1",
+"Teleaulax"="maroon1",
+"Chlorarachnida"="purple",
+"Aureococcus"="#FFFF00",
+"Pelagomonadaceae"="#EFFD5F",
+"Pelagophyceae"="#FFBF00",
+"Dictyochophyceae"="#E4D00A",
+"Chrysophyceae"="gold",
+"Ochromonas"="darkkhaki",
+"Ochrophyta"="lightgoldenrod1",
+"Bacillariophyta"="orange4",
+"Chaetoceros"="peachpuff3",
+"Polar-centric-Mediophyceae"="rosybrown",
+"Radial-centric-basal-Coscinodiscophyceae"="tan3",
+"Raphid-pennate"="mistyrose4")
+
+
+#FFBF00
+
+
+sigtabgen$Curated=factor(sigtabgen$Curated, levels=c("Bathycoccus",
+"Chlorellales",
+"Chloropicon",
+"Mamiellaceae",
+"Marsupiomonas",
+"Pyramimonadales",
+"Cyanobium",
+"Prochlorococcus",
+"Synechococcus",
+"Cryptomonadales",
+"Isochrysis",
+"Phaeocystis",
+"Prymnesiales",
+"Prymnesiophyceae",
+"Teleaulax",
+"Chlorarachnida",
+"Aureococcus",
+"Pelagomonadaceae",
+"Pelagophyceae",
+"Dictyochophyceae",
+"Chrysophyceae",
+"Ochromonas",
+"Ochrophyta",
+"Bacillariophyta",
+"Chaetoceros",
+"Polar-centric-Mediophyceae",
+"Radial-centric-basal-Coscinodiscophyceae",
+"Raphid-pennate"))
+
+library("ggplot2")
+theme_set(theme_bw())
+sigtabgen = subset(sigtab, !is.na(ASV))
+# Phylum order
+x = tapply(sigtabgen$log2FoldChange, sigtabgen$Curated, function(x) max(x))
+x = sort(x, TRUE)
+sigtabgen$Curated = factor(as.character(sigtabgen$Curated), levels=names(x))
+
+
+
+# Genus order
+x = tapply(sigtabgen$log2FoldChange, sigtabgen$ASV, function(x) max(x))
+x = sort(x, TRUE)
+sigtabgen$ASV = factor(as.character(sigtabgen$ASV), levels=names(x))
+
+ggplot(sigtabgen, aes(y=Curated, x=log2FoldChange, color=Curated)) + 
+  geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
+  geom_point(size=6) + 
+  theme(axis.text.x = element_text(angle = -90, hjust = 0, vjust=0.5)) +coord_flip()+ geom_vline(xintercept=2, linetype="dashed", color = "red") +  geom_vline(xintercept=-2, linetype="dashed", color = "red") + theme(axis.text=element_text(size=24),axis.title=element_text(size=24,face="bold"), legend.text=element_text(
+    size=24), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1))+scale_color_manual(values = colors_sig)
+ggsave("differential_ASV_Clustering.pdf", height=12, width=20)
+
+
+```
+
+
+
+
+
